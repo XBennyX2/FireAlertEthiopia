@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import NotificationBell from '../components/NotificationBell';
 import IncidentMap from '../components/IncidentMap';
+import LiveTrackingMap from '../components/LiveTrackingMap';
 import API from '../api/axios';
 import '../dashboard.css';
-import LiveTrackingMap from '../components/LiveTrackingMap';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -17,7 +18,7 @@ function fmtDate(iso) {
 
 function StatusBadge({ status, t }) {
   const normalized = status?.toLowerCase() || 'pending';
-  const label = t[normalized] || status || 'Pending';
+  const label      = t[normalized] || status || 'Pending';
   return (
     <span className={`status-badge status-${normalized}`}>
       {label}
@@ -44,14 +45,14 @@ export default function ResponderDashboard() {
   const { t }            = useLanguage();
   const navigate         = useNavigate();
 
-  const [incidents,     setIncidents]     = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [error,         setError]         = useState('');
-  const [onDuty,        setOnDuty]        = useState(true);
-  const [actionLoading, setActionLoading] = useState('');
-  const [showMap,       setShowMap]       = useState(true);
+  const [incidents,         setIncidents]         = useState([]);
+  const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState('');
+  const [onDuty,            setOnDuty]            = useState(true);
+  const [actionLoading,     setActionLoading]     = useState('');
+  const [showMap,           setShowMap]           = useState(true);
+  const [trackingIncidentId, setTrackingIncidentId] = useState(null);
 
-  // ── Action labels using dot notation ─────────────────────────────
   const ACTION_LABELS = {
     verify:   { label: t.verify,   style: 'btn-action'  },
     dispatch: { label: t.dispatch, style: 'btn-primary' },
@@ -77,6 +78,10 @@ export default function ResponderDashboard() {
     setActionLoading(incidentId + action);
     try {
       await API.put(`/responder/incidents/${incidentId}/${action}`);
+      // Stop tracking if the incident was resolved or rejected
+      if (action === 'resolve' || action === 'reject') {
+        setTrackingIncidentId(null);
+      }
       await loadIncidents();
     } catch (err) {
       alert(err.response?.data?.message || `Action "${action}" failed.`);
@@ -116,7 +121,11 @@ export default function ResponderDashboard() {
 
           <span className="dash-role-badge">{t.responder}</span>
           <span className="dash-user-name">{user?.name}</span>
-          <button className="dash-logout-btn" onClick={() => { logout(); navigate('/'); }}>
+          <NotificationBell />
+          <button
+            className="dash-logout-btn"
+            onClick={() => { logout(); navigate('/'); }}
+          >
             {t.signOut}
           </button>
         </div>
@@ -170,21 +179,24 @@ export default function ResponderDashboard() {
           </div>
         </div>
 
-        {/* ── Incident Map ─────────────────────────────────────── */}
+        {/* ── Overview Incident Map ────────────────────────────── */}
         {!loading && incidents.length > 0 && showMap && (
-  <div style={{ marginBottom:'2rem', position:'relative', zIndex:1 }}>
-    <div className="section-label" style={{ marginBottom:'0.75rem' }}>
-      🗺️ Active Incident Locations
-    </div>
-    <IncidentMap
-      key={incidents.map(i => i._id + i.status).join('-')}
-      incidents={incidents}
-      height={380}
-    />
+          <div style={{ marginBottom:'2rem', position:'relative', zIndex:1 }}>
+            <div className="section-label" style={{ marginBottom:'0.75rem' }}>
+              🗺️ Active Incident Locations
+            </div>
+            <IncidentMap
+              key={incidents.map(i => i._id + i.status).join('-')}
+              incidents={incidents}
+              height={380}
+            />
             {/* Status legend */}
             <div style={{ display:'flex', flexWrap:'wrap', gap:'0.75rem', marginTop:'0.75rem' }}>
               {Object.entries(STATUS_COLORS).map(([status, color]) => (
-                <div key={status} style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.72rem', color:'#666' }}>
+                <div
+                  key={status}
+                  style={{ display:'flex', alignItems:'center', gap:'0.3rem', fontSize:'0.72rem', color:'#666' }}
+                >
                   <div style={{ width:8, height:8, borderRadius:'50%', background: color }} />
                   {status.charAt(0).toUpperCase() + status.slice(1)}
                 </div>
@@ -197,7 +209,9 @@ export default function ResponderDashboard() {
         <div className="section-label">{t.activeIncidents}</div>
 
         {loading && <div className="loading-state">{t.loading}</div>}
-        {error   && <div className="loading-state" style={{ color:'#f87c74' }}>{error}</div>}
+        {error   && (
+          <div className="loading-state" style={{ color:'#f87c74' }}>{error}</div>
+        )}
 
         {!loading && incidents.length === 0 && (
           <div className="empty-state">
@@ -212,11 +226,16 @@ export default function ResponderDashboard() {
               const actions        = getActions(incident.status);
               const rawType        = incident.fire_type?.toLowerCase() || 'other';
               const translatedType = t.fireTypes?.[rawType] || incident.fire_type || t.fireTypes?.other;
+              const isTracking     = trackingIncidentId === incident._id;
 
               return (
-                <div key={incident._id} className="card" style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+                <div
+                  key={incident._id}
+                  className="card"
+                  style={{ display:'flex', flexDirection:'column', gap:'1rem' }}
+                >
 
-                  {/* Top row */}
+                  {/* ── Top row ──────────────────────────────── */}
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                     <div>
                       <span style={{ fontSize:'0.7rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', color:'#444' }}>
@@ -226,23 +245,24 @@ export default function ResponderDashboard() {
                         <StatusBadge status={incident.status} t={t} />
                       </div>
                     </div>
+
                     {/* AI Trust Score */}
                     {incident.ai_trust_score !== undefined && (
                       <div style={{
-                        padding:    '0.25rem 0.6rem',
-                        background: incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.12)' : 'rgba(244,130,10,0.12)',
-                        border:     `1px solid ${incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.25)' : 'rgba(244,130,10,0.25)'}`,
+                        padding:      '0.25rem 0.6rem',
+                        background:   incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.12)' : 'rgba(244,130,10,0.12)',
+                        border:       `1px solid ${incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.25)' : 'rgba(244,130,10,0.25)'}`,
                         borderRadius: 6,
-                        fontSize:   '0.7rem',
-                        fontWeight: 600,
-                        color:      incident.ai_trust_score >= 75 ? '#22c55e' : '#f4820a',
+                        fontSize:     '0.7rem',
+                        fontWeight:   600,
+                        color:        incident.ai_trust_score >= 75 ? '#22c55e' : '#f4820a',
                       }}>
                         AI {incident.ai_trust_score}%
                       </div>
                     )}
                   </div>
 
-                  {/* Media preview */}
+                  {/* ── Media preview ────────────────────────── */}
                   {incident.mediaFiles?.length > 0 && (
                     <img
                       src={`http://localhost:5000/${incident.mediaFiles[0]}`}
@@ -252,24 +272,35 @@ export default function ResponderDashboard() {
                     />
                   )}
 
-                  {/* Description */}
-                  <p style={{ fontSize:'0.875rem', color:'#c0bdb8', lineHeight:1.55, margin:0,
-                    overflow:'hidden', display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical' }}>
+                  {/* ── Description ──────────────────────────── */}
+                  <p style={{
+                    fontSize:        '0.875rem',
+                    color:           '#c0bdb8',
+                    lineHeight:      1.55,
+                    margin:          0,
+                    overflow:        'hidden',
+                    display:         '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                  }}>
                     {incident.description}
                   </p>
 
-                  {/* AI flags */}
+                  {/* ── AI flags ─────────────────────────────── */}
                   {incident.ai_flags?.length > 0 && (
                     <div style={{ display:'flex', flexWrap:'wrap', gap:'0.3rem' }}>
                       {incident.ai_flags.map(flag => (
-                        <span key={flag} style={{ fontSize:'0.65rem', padding:'0.15rem 0.5rem', background:'rgba(230,60,47,0.1)', color:'#f87c74', borderRadius:4, letterSpacing:'0.03em' }}>
+                        <span
+                          key={flag}
+                          style={{ fontSize:'0.65rem', padding:'0.15rem 0.5rem', background:'rgba(230,60,47,0.1)', color:'#f87c74', borderRadius:4, letterSpacing:'0.03em' }}
+                        >
                           {flag.replace(/_/g, ' ')}
                         </span>
                       ))}
                     </div>
                   )}
 
-                  {/* Location + Time */}
+                  {/* ── Location + Time ───────────────────────── */}
                   <div style={{ borderTop:'1px solid #1e1e1e', paddingTop:'0.65rem', fontSize:'0.72rem', color:'#555', display:'flex', justifyContent:'space-between' }}>
                     <span>
                       📍 {incident.location?.address || `${Number(incident.location?.lat).toFixed(4)}, ${Number(incident.location?.lng).toFixed(4)}`}
@@ -277,7 +308,7 @@ export default function ResponderDashboard() {
                     <span>{fmtDate(incident.reportedAt)}</span>
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* ── Action Buttons ────────────────────────── */}
                   {actions.length > 0 && (
                     <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
                       {actions.map(action => {
@@ -294,6 +325,30 @@ export default function ResponderDashboard() {
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* ── Live Tracking — dispatched only ──────── */}
+                  {incident.status === 'dispatched' && (
+                    <div>
+                      <button
+                        className="btn-secondary"
+                        style={{ width:'100%', fontSize:'0.78rem', marginBottom: isTracking ? '0.75rem' : 0 }}
+                        onClick={() => setTrackingIncidentId(isTracking ? null : incident._id)}
+                      >
+                        {isTracking
+                          ? '📍 Stop Sharing Location'
+                          : '📍 Share My Location & See Route'}
+                      </button>
+
+                      {isTracking && (
+                        <LiveTrackingMap
+                          key={incident._id}
+                          incident={incident}
+                          mode="responder"
+                          height={320}
+                        />
+                      )}
                     </div>
                   )}
 

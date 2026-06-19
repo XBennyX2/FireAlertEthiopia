@@ -6,9 +6,10 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 from modules.duplicate_detection  import check_duplicate
-from modules.severity_classifier  import classify_severity
 from modules.false_report_scorer  import calculate_report_trust_score, update_reputation_score
 from modules.heatmap_analytics    import generate_risk_heatmap, generate_trend_analysis
+from modules.text_classifier      import classify_description, classify_severity_from_text
+from modules.image_classifier     import analyze_fire_image
 
 load_dotenv()
 
@@ -18,6 +19,8 @@ CORS(app)
 # MongoDB connection
 client = MongoClient(os.getenv('MONGO_URI'))
 db     = client.get_default_database()
+
+print("All AI models loaded. Flask app ready.")
 
 
 # ── 1. Duplicate check ────────────────────────────────────────────
@@ -31,7 +34,6 @@ def route_check_duplicate():
         {'_id': 1, 'location': 1, 'reportedAt': 1}
     ).sort('reportedAt', -1).limit(200))
 
-    # Flatten location fields for the module
     flattened = []
     for r in recent:
         try:
@@ -48,15 +50,57 @@ def route_check_duplicate():
     return jsonify(result)
 
 
-# ── 2. Severity classification ────────────────────────────────────
+# ── 2. Severity + description analysis (NOW REAL AI) ─────────────
 @app.route('/api/ai/classify-severity', methods=['POST'])
 def route_classify_severity():
-    data      = request.json
-    result    = classify_severity(
-        data.get('description', ''),
-        data.get('fire_type', '')
-    )
-    return jsonify(result)
+    data        = request.json
+    description = data.get('description', '')
+    fire_type   = data.get('fire_type', '')
+
+    # Real language understanding — not keyword matching
+    emergency_result = classify_description(description)
+    severity_result  = classify_severity_from_text(description)
+
+    print(f"Description analysis -> emergency: {emergency_result['is_genuine_emergency']} "
+          f"confidence: {emergency_result['emergency_confidence']} "
+          f"severity: {severity_result['predicted_severity']}")
+
+    return jsonify({
+        'predicted_severity':       severity_result['predicted_severity'],
+        'severity_confidence':      severity_result['confidence'],
+        'is_genuine_emergency':     emergency_result['is_genuine_emergency'],
+        'emergency_confidence':     emergency_result['emergency_confidence'],
+        'top_label':                emergency_result['top_label'],
+        'all_scores':               emergency_result['all_scores'],
+        'credibility_adjustment':   _emergency_to_credibility(emergency_result),
+        'is_vague':                 emergency_result['emergency_confidence'] < 0.2,
+    })
+
+
+def _emergency_to_credibility(emergency_result):
+    """
+    Convert the emergency classification confidence into a
+    credibility score adjustment that feeds the trust scorer.
+    """
+    confidence = emergency_result['emergency_confidence']
+    top_label  = emergency_result['top_label']
+
+    # Strong genuine emergency signal
+    if emergency_result['is_genuine_emergency'] and confidence > 0.6:
+        return 20
+    if emergency_result['is_genuine_emergency'] and confidence > 0.4:
+        return 10
+
+    # Explicitly non-emergency content
+    if 'socializing' in top_label or 'having fun' in top_label:
+        return -35
+    if 'joke' in top_label or 'test' in top_label or 'unrelated' in top_label:
+        return -30
+    if 'minor' in top_label or 'under control' in top_label:
+        return -10
+
+    # Ambiguous — small penalty
+    return -5
 
 
 # ── 3. Trust score ────────────────────────────────────────────────
@@ -119,6 +163,27 @@ def route_trends():
             continue
 
     result = generate_trend_analysis(flattened)
+    return jsonify(result)
+
+
+# ── 7. Image-based fire verification (NOW REAL CLIP AI) ──────────
+@app.route('/api/ai/analyze-image', methods=['POST'])
+def route_analyze_image():
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+
+    file        = request.files['image']
+    image_bytes = file.read()
+
+    if len(image_bytes) == 0:
+        return jsonify({'error': 'Empty image file'}), 400
+
+    result = analyze_fire_image(image_bytes)
+
+    print(f"Image analysis -> fire_detected: {result['fire_detected']} "
+          f"confidence: {result['fire_confidence']}% "
+          f"top_label: {result['top_label']}")
+
     return jsonify(result)
 
 

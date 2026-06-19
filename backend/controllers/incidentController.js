@@ -4,25 +4,37 @@ const axios    = require('axios');
 const AI_URL = 'http://localhost:5001/api/ai';
 
 // Helper — call AI service safely. If AI is down, return defaults.
-async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia) {
+async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia, gpsScore, mediaPath, mediaIsLive) {
   try {
     const reportedAt = new Date().toISOString();
 
-    const [duplicateRes, severityRes, trustRes] = await Promise.all([
+    // 1. Fetch duplicate check and severity classification concurrently first
+    const [duplicateRes, severityRes] = await Promise.all([
       axios.post(`${AI_URL}/check-duplicate`, {
         new_report: { lat, lng, reported_at: reportedAt }
       }),
-      axios.post(`${AI_URL}/classify-severity`, { description, fire_type }),
-      axios.post(`${AI_URL}/score-report`, {
-        has_media:                        hasMedia,
-        media_is_live:                    false,
-        reporter_reputation_score:        user.reputationScore || 50,
-        gps_accuracy_meters:              50,
-        description_length:               description.length,
-        reporter_previous_false_reports:  user.falseReportCount || 0,
-        is_duplicate:                     false
-      })
+      axios.post(`${AI_URL}/classify-severity`, { description, fire_type })
     ]);
+
+    // 2. Build the trust payload using fields from the severity and duplicate results
+    const trustPayload = {
+      has_media:                          hasMedia,
+      media_is_live:                      mediaIsLive === 'true' || mediaIsLive === true,
+      reporter_reputation_score:          user.reputationScore || 50,
+      gps_accuracy_meters:                50,
+      gps_validation_score:               gpsScore || 50,
+      description_length:                 description.length,
+      description_credibility_adjustment: severityRes.data.credibility_adjustment || 0,
+      description_is_vague:               severityRes.data.is_vague || false,
+      description_is_genuine_emergency:   severityRes.data.is_genuine_emergency || false,
+      description_emergency_confidence:   severityRes.data.emergency_confidence || 0,
+      reporter_previous_false_reports:    user.falseReportCount || 0,
+      is_duplicate:                       duplicateRes.data.is_duplicate,
+      image_analysis:                     null // Placeholder or add mediaPath/analysis if available downstream
+    };
+
+    // 3. Request the trust score using the enriched payload
+    const trustRes = await axios.post(`${AI_URL}/score-report`, trustPayload);
 
     return {
       is_duplicate:      duplicateRes.data.is_duplicate,
@@ -49,7 +61,7 @@ async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia) {
 
 // POST /api/incidents
 const reportIncident = async (req, res) => {
-  const { description, fire_type, lat, lng, address } = req.body;
+  const { description, fire_type, lat, lng, address, gps_validated, gps_score, media_is_live } = req.body;
 
   if (!description || !lat || !lng) {
     return res.status(400).json({ message: 'Description and location are required' });
@@ -58,15 +70,20 @@ const reportIncident = async (req, res) => {
   try {
     const mediaFiles = req.files ? req.files.map(f => f.path) : [];
     const hasMedia   = mediaFiles.length > 0;
+    const firstMedia = hasMedia ? mediaFiles[0] : null;
+    const gpsScore   = gps_score ? parseInt(gps_score, 10) : 50;
 
-    // Get AI analysis
+    // Get AI analysis with live capture flags passed along
     const ai = await getAIAnalysis(
       description,
       fire_type || 'other',
       parseFloat(lat),
       parseFloat(lng),
       req.user,
-      hasMedia
+      hasMedia,
+      gpsScore,
+      firstMedia,
+      media_is_live
     );
 
     const incident = await Incident.create({

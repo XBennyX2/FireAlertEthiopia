@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -8,6 +8,7 @@ import VoiceReportButton from '../components/VoiceReportButton';
 import NotificationBell from '../components/NotificationBell';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import '../dashboard.css';
+import LiveCameraCapture from '../components/LiveCameraCapture';
 
 const FIRE_TYPES_EN = [
   { value: 'residential', label: '🏠 Residential' },
@@ -22,7 +23,6 @@ export default function ReportForm() {
   const navigate         = useNavigate();
   const { user, logout } = useAuth();
   const { t, language }  = useLanguage();
-  const fileRef          = useRef(null);
 
   // ── Form fields ───────────────────────────────────────────────────
   const [description, setDescription] = useState('');
@@ -39,6 +39,8 @@ export default function ReportForm() {
   const [submitting,  setSubmitting]  = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [success,     setSuccess]     = useState(false);
+  const [showCamera,  setShowCamera]  = useState(false);
+  const [isLiveCaptured, setIsLiveCaptured] = useState(false);
 
   // ── Auto-fetch GPS on mount ───────────────────────────────────────
   useEffect(() => { fetchGPS(); }, []);
@@ -94,11 +96,10 @@ export default function ReportForm() {
       setMediaPreview(null);
     }
   }
-
   function removeFile() {
     setMediaFile(null);
     setMediaPreview(null);
-    if (fileRef.current) fileRef.current.value = '';
+    setIsLiveCaptured(false);
   }
 
   // ── Voice result ──────────────────────────────────────────────────
@@ -153,7 +154,13 @@ export default function ReportForm() {
       formData.append('lat',         location.lat);
       formData.append('lng',         location.lng);
       formData.append('address',     location.address);
-      formData.append('gps_validated', gpsCheck.inAddisArea ? 'true' : 'false');
+      
+      // Updated GPS validation logic & added live-captured flag
+      const gpsCheckResult = validateGPS(location.lat, location.lng); 
+      formData.append('gps_validated',   gpsCheckResult?.inAddisArea ? 'true' : 'false');
+      formData.append('gps_score',       String(gpsCheckResult?.inAddisArea ? 100 : 50));
+      formData.append('media_is_live',   String(isLiveCaptured));
+      
       if (mediaFile) formData.append('media', mediaFile);
 
       await API.post('/incidents', formData, {
@@ -330,33 +337,42 @@ export default function ReportForm() {
             {/* ── Media Upload ──────────────────────────────── */}
             <div className="form-group">
               <label className="form-label">{t.mediaLabel}</label>
+
               {!mediaFile ? (
                 <div
                   style={{ border:'2px dashed #2a2a2a', borderRadius:10, padding:'2rem', textAlign:'center', cursor:'pointer', transition:'border-color 0.2s' }}
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => setShowCamera(true)}
                   onMouseOver={e => e.currentTarget.style.borderColor = '#e63c2f'}
                   onMouseOut={e  => e.currentTarget.style.borderColor = '#2a2a2a'}
                 >
                   <div style={{ fontSize:'1.75rem', marginBottom:'0.5rem' }}>📷</div>
-                  <div style={{ fontSize:'0.85rem', color:'#666' }}>{t.mediaClick}</div>
-                  <div style={{ fontSize:'0.75rem', color:'#444', marginTop:'0.25rem' }}>{t.mediaMax}</div>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*,video/*"
-                    style={{ display:'none' }}
-                    onChange={handleFileChange}
-                  />
+                  <div style={{ fontSize:'0.85rem', color:'#666' }}>
+                    {language === 'am' ? 'ቀጥታ ፎቶ ለማንሳት ጠቅ ያድርጉ' : 'Tap to take a live photo'}
+                  </div>
+                  <div style={{ fontSize:'0.75rem', color:'#444', marginTop:'0.25rem' }}>
+                    {language === 'am'
+                      ? 'ከቤተ-ስዕል ምስሎችን መጫን አይፈቀድም'
+                      : 'Gallery uploads are not allowed — camera only'}
+                  </div>
                 </div>
               ) : (
                 <div style={{ position:'relative', border:'1px solid #2a2a2a', borderRadius:10, overflow:'hidden' }}>
-                  {mediaPreview
-                    ? <img src={mediaPreview} alt="preview" style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }} />
-                    : <div style={{ padding:'1rem', display:'flex', alignItems:'center', gap:'0.5rem' }}>
-                        <span>🎥</span>
-                        <span style={{ fontSize:'0.85rem', color:'#888' }}>{mediaFile.name}</span>
-                      </div>
-                  }
+                  {mediaPreview && (
+                    <img src={mediaPreview} alt="preview" style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }} />
+                  )}
+
+                  {/* Live captured badge */}
+                  {isLiveCaptured && (
+                    <div style={{
+                      position:'absolute', top:8, left:8,
+                      background:'rgba(34,197,94,0.92)', color:'#fff',
+                      padding:'0.25rem 0.65rem', borderRadius:999,
+                      fontSize:'0.68rem', fontWeight:700, letterSpacing:'0.03em',
+                    }}>
+                      ✓ {language === 'am' ? 'ቀጥታ ተነስቷል' : 'Live Captured'}
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={removeFile}
@@ -365,6 +381,20 @@ export default function ReportForm() {
                     {t.removeFile}
                   </button>
                 </div>
+              )}
+
+              {/* Camera overlay */}
+              {showCamera && (
+                <LiveCameraCapture
+                  language={language}
+                  onCapture={({ file, previewUrl }) => {
+                    setMediaFile(file);
+                    setMediaPreview(previewUrl);
+                    setIsLiveCaptured(true);
+                    setShowCamera(false);
+                  }}
+                  onCancel={() => setShowCamera(false)}
+                />
               )}
             </div>
 
