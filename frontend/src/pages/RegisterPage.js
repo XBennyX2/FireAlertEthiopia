@@ -5,11 +5,13 @@ import API from '../api/axios';
 import '../auth.css';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useToast } from '../context/ToastContext';
 
 export default function RegisterPage() {
   const { t } = useLanguage();
   const navigate  = useNavigate();
   const { login } = useAuth();
+  const { toast } = useToast();
 
   // ── Form state ────────────────────────────────────────────────────
   const [name,            setName]            = useState('');
@@ -78,12 +80,18 @@ export default function RegisterPage() {
       // Auto login after successful registration
       login(data);
 
+      // Toast on successful registration
+      toast.success('Account created successfully. Welcome to FireAlert!');
+
       // Registered users always go to /dashboard
       navigate('/dashboard');
 
     } catch (err) {
       const msg = err.response?.data?.message || t.errorRegisterFailed || 'Registration failed. Please try again.';
       setError(msg);
+      
+      // Toast on error
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

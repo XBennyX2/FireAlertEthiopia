@@ -2,7 +2,7 @@ const express    = require('express');
 const router     = express.Router();
 const multer     = require('multer');
 const path       = require('path');
-
+const { requireActiveReputation } = require('../middleware/reputationMiddleware');
 const { protect }   = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 const {
@@ -40,5 +40,11 @@ const upload = multer({
 router.post('/',    protect, authorize('user'),                    upload.array('media', 5), reportIncident);
 router.get('/mine', protect, authorize('user'),                    getMyIncidents);
 router.get('/all',  protect, authorize('admin', 'responder'),      getAllIncidents);
-
+router.post('/',
+  protect,
+  authorize('user'),
+  requireActiveReputation,   // ← add this
+  upload.array('media', 5),
+  reportIncident
+);
 module.exports = router;

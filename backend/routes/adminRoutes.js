@@ -12,6 +12,8 @@ const {
   approveApplication,
   rejectApplication,
   getAuditLogs,
+  adjustReputation,
+  unbanUser,
   getAnalytics
 } = require('../controllers/adminController');
 
@@ -24,6 +26,10 @@ router.put('/applications/:id/approve',  protect, authorize('admin'), approveApp
 router.put('/applications/:id/reject',   protect, authorize('admin'), rejectApplication);
 router.get('/logs',                      protect, authorize('admin'), getAuditLogs);
 router.get('/analytics',                 protect, authorize('admin'), getAnalytics);
+
+// Reputation adjustment routes
+router.put('/users/:id/reputation',      protect, authorize('admin'), adjustReputation);
+router.put('/users/:id/unban',           protect, authorize('admin'), unbanUser);
 
 // ── Any logged-in user can submit a responder application ─────────
 router.post('/applications', protect, submitApplication);

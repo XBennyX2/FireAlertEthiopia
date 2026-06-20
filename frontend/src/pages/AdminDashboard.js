@@ -6,6 +6,7 @@ import API from '../api/axios';
 import '../dashboard.css';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useToast } from '../context/ToastContext';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -18,6 +19,7 @@ export default function AdminDashboard() {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'logs' | 'map'
 
@@ -50,13 +52,30 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleUnban(userId) {
+    setActionId(userId + 'unban');
+    try {
+      await API.put(`/admin/users/${userId}/unban`);
+      toast.success('User unbanned successfully.');
+      await loadAll();
+    } catch (err) {
+      toast.error('Failed to unban user.');
+    } finally {
+      setActionId('');
+    }
+  }
+
   async function changeRole(userId, newRole) {
     setActionId(userId + 'role');
     try {
       await API.put(`/admin/users/${userId}/role`, { role: newRole });
       setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: newRole } : u));
-    } catch (err) { alert('Failed to change role.'); }
-    finally { setActionId(''); }
+      toast.success(`Role updated to ${newRole}.`);
+    } catch (err) { 
+      toast.error('Failed to change role.'); 
+    } finally { 
+      setActionId(''); 
+    }
   }
 
   async function toggleActive(userId, isActive) {
@@ -64,8 +83,12 @@ export default function AdminDashboard() {
     try {
       await API.put(`/admin/users/${userId}/status`, { isActive: !isActive });
       setUsers(prev => prev.map(u => u._id === userId ? { ...u, isActive: !isActive } : u));
-    } catch (err) { alert('Failed to update user status.'); }
-    finally { setActionId(''); }
+      toast.success(`User ${isActive ? 'deactivated' : 'activated'} successfully.`);
+    } catch (err) { 
+      toast.error('Failed to update user status.'); 
+    } finally { 
+      setActionId(''); 
+    }
   }
 
   async function handleApplication(appId, action) {
@@ -73,8 +96,21 @@ export default function AdminDashboard() {
     try {
       await API.put(`/admin/applications/${appId}/${action}`);
       setApps(prev => prev.filter(a => a._id !== appId));
-    } catch (err) { alert(`Failed to ${action} application.`); }
-    finally { setActionId(''); }
+      
+      if (action === 'approve') {
+        toast.success('Application approved. User promoted to responder.');
+      } else {
+        toast.success('Application rejected.');
+      }
+    } catch (err) { 
+      if (action === 'approve') {
+        toast.error('Failed to approve application.');
+      } else {
+        toast.error('Failed to reject application.');
+      }
+    } finally { 
+      setActionId(''); 
+    }
   }
 
   const TAB_STYLE = (targetTab) => ({
@@ -101,8 +137,34 @@ export default function AdminDashboard() {
         </Link>
         <div className="dash-topbar-right">
           <LanguageSwitcher />
+          <Link
+            to="/profile"
+            style={{
+              width:          32,
+              height:         32,
+              borderRadius:   '50%',
+              background:     user?.profilePhoto ? 'transparent' : 'linear-gradient(135deg, #e63c2f, #f4820a)',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              overflow:       'hidden',
+              border:         '1px solid #2a2a2a',
+              textDecoration: 'none',
+              flexShrink:     0,
+              fontSize:       '0.75rem',
+              fontFamily:     "'Syne',sans-serif",
+              fontWeight:     800,
+              color:          '#fff',
+            }}
+          >
+            {user?.profilePhoto
+              ? <img src={user.profilePhoto} alt="profile" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              : user?.name?.charAt(0)?.toUpperCase() || '?'
+            }
+          </Link>
           <span className="dash-role-badge">{t.admin}</span>
           <span className="dash-user-name">{user?.name}</span>
+
           <Link to="/analytics" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>📊 {t.analyticsTitle}</Link>
           <button className="dash-logout-btn" onClick={() => { logout(); navigate('/'); }}>{t.signOut}</button>
         </div>
@@ -166,12 +228,47 @@ export default function AdminDashboard() {
             {users.length === 0 && <div className="empty-state"><div className="empty-state-icon">👤</div><div>{t.noUsers}</div></div>}
             {users.map(u => (
               <div key={u._id} className="card-sm" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.75rem' }}>
-                <div>
-                  <div style={{ fontWeight:600, fontSize:'0.875rem', color:'var(--text-primary)' }}>{u.name}</div>
-                  <div style={{ fontSize:'0.75rem', color:'var(--text-muted)', marginTop:'0.1rem' }}>{u.email}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.15rem' }}>
+                    <div style={{ fontWeight:600, fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                      {u.name}
+                    </div>
+                    {/* Status badges */}
+                    {u.isBanned && (
+                      <span style={{ fontSize:'0.65rem', padding:'0.1rem 0.5rem', background:'rgba(127,29,29,0.2)', color:'#f87c74', borderRadius:999, fontWeight:600 }}>
+                        ⛔ BANNED
+                      </span>
+                    )}
+                    {!u.isBanned && u.isRestricted && (
+                      <span style={{ fontSize:'0.65rem', padding:'0.1rem 0.5rem', background:'rgba(230,60,47,0.12)', color:'#e63c2f', borderRadius:999, fontWeight:600 }}>
+                        🚫 RESTRICTED
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>
+                    {u.email}
+                  </div>
+                  {/* Reputation score bar */}
+                  <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'0.35rem' }}>
+                    <div style={{ flex:1, height:3, background:'#1e1e1e', borderRadius:99, overflow:'hidden', maxWidth:80 }}>
+                      <div style={{
+                        height:     '100%',
+                        width:      `${u.reputationScore ?? 100}%`,
+                        background: (u.reputationScore ?? 100) >= 80 ? '#22c55e' : (u.reputationScore ?? 100) >= 60 ? '#f4820a' : '#e63c2f',
+                        borderRadius: 99,
+                      }} />
+                    </div>
+                    <span style={{ fontSize:'0.68rem', color:'var(--text-dim)' }}>
+                      Rep: {u.reputationScore ?? 100}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', flexWrap:'wrap' }}>
-                  <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>{t.joined} {fmtDate(u.createdAt)}</span>
+
+                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap' }}>
+                  <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>
+                    {t.joined} {fmtDate(u.createdAt)}
+                  </span>
+
                   {/* Role selector */}
                   <select
                     className="form-select"
@@ -180,9 +277,24 @@ export default function AdminDashboard() {
                     disabled={actionId === u._id + 'role' || u._id === user?._id}
                     style={{ padding:'0.35rem 0.65rem', fontSize:'0.78rem', width:'auto' }}
                   >
-                    {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                    {['user','responder','admin'].map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
                   </select>
-                  {/* Active toggle */}
+
+                  {/* Unban button — only shown if banned */}
+                  {u.isBanned && u._id !== user?._id && (
+                    <button
+                      className="btn-action"
+                      style={{ fontSize:'0.75rem', color:'#22c55e', borderColor:'rgba(34,197,94,0.25)' }}
+                      onClick={() => handleUnban(u._id)}
+                      disabled={actionId === u._id + 'unban'}
+                    >
+                      ✓ Unban
+                    </button>
+                  )}
+
+                  {/* Activate/Deactivate */}
                   <button
                     className={u.isActive ? 'btn-danger' : 'btn-action'}
                     onClick={() => toggleActive(u._id, u.isActive)}
@@ -277,10 +389,10 @@ export default function AdminDashboard() {
             </div>
             
             <IncidentMap
-  key={allIncidents.map(i => i._id + i.status).join('-')}
-  incidents={allIncidents}
-  height={520}
-/>
+              key={allIncidents.map(i => i._id + i.status).join('-')}
+              incidents={allIncidents}
+              height={520}
+            />
             
             {/* Stats below map */}
             <div className="stat-grid" style={{ marginTop:'1.25rem' }}>

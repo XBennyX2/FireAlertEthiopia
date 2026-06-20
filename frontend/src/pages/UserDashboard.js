@@ -28,7 +28,7 @@ function StatusBadge({ status, t }) {
 }
 
 export default function UserDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { t }            = useLanguage();
   const navigate         = useNavigate();
 
@@ -40,8 +40,12 @@ export default function UserDashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const { data } = await API.get('/incidents/mine');
-        setIncidents(data);
+        // Refresh both incidents and user reputation score simultaneously
+        const [incidentRes] = await Promise.all([
+          API.get('/incidents/mine'),
+          refreshUser(),
+        ]);
+        setIncidents(incidentRes.data);
       } catch (err) {
         setError('Could not load your reports. Please refresh.');
       } finally {
@@ -70,6 +74,31 @@ export default function UserDashboard() {
           <LanguageSwitcher />
           <span className="dash-role-badge">{t.citizen}</span>
           <span className="dash-user-name">{user?.name}</span>
+          <Link
+            to="/profile"
+            style={{
+              width:          32,
+              height:         32,
+              borderRadius:   '50%',
+              background:     user?.profilePhoto ? 'transparent' : 'linear-gradient(135deg, #e63c2f, #f4820a)',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              overflow:       'hidden',
+              border:         '1px solid #2a2a2a',
+              textDecoration: 'none',
+              flexShrink:     0,
+              fontSize:       '0.75rem',
+              fontFamily:     "'Syne',sans-serif",
+              fontWeight:     800,
+              color:          '#fff',
+            }}
+          >
+            {user?.profilePhoto
+              ? <img src={user.profilePhoto} alt="profile" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              : user?.name?.charAt(0)?.toUpperCase() || '?'
+            }
+          </Link>
           <NotificationBell />
           <button
             className="dash-logout-btn"
@@ -158,7 +187,14 @@ export default function UserDashboard() {
                 <div
                   key={incident._id}
                   className="card"
-                  style={{ display:'flex', flexDirection:'column', gap:'0.75rem' }}
+                  style={{ 
+                    display:'flex', 
+                    flexDirection:'column', 
+                    gap:'0.75rem',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.2s, transform 0.2s'
+                  }}
+                  onClick={() => navigate(`/incidents/${incident._id}`)}
                 >
 
                   {/* ── Card top row ──────────────────────────── */}
@@ -223,7 +259,7 @@ export default function UserDashboard() {
 
                   {/* ── Live Tracking — dispatched only ──────── */}
                   {incident.status === 'dispatched' && (
-                    <div>
+                    <div onClick={(e) => e.stopPropagation()}>
                       <button
                         className="btn-secondary"
                         style={{

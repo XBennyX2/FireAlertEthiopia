@@ -238,6 +238,63 @@ const getAnalytics = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const { applyReputationConsequences } = require('../utils/reputationManager');
+
+// PUT /api/admin/users/:id/reputation — manually adjust reputation
+const adjustReputation = async (req, res) => {
+  const { newScore, reason } = req.body;
+
+  if (newScore === undefined || newScore < 0 || newScore > 100) {
+    return res.status(400).json({ message: 'Score must be between 0 and 100' });
+  }
+
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const result = await applyReputationConsequences(user._id, newScore);
+
+    await log(
+      req.user._id,
+      'MANUAL_REPUTATION_ADJUSTMENT',
+      `Admin adjusted ${user.email} reputation from ${user.reputationScore} to ${newScore}. Reason: ${reason || 'No reason provided'}`
+    );
+
+    res.json({
+      message: `Reputation score updated to ${newScore}`,
+      user: await User.findById(req.params.id).select('-password'),
+      statusChanged: result,
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// PUT /api/admin/users/:id/unban — manually unban a user
+const unbanUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Reset to warning level minimum so they can log in
+    const rehabilitatedScore = 65;
+    await applyReputationConsequences(user._id, rehabilitatedScore);
+
+    await log(
+      req.user._id,
+      'MANUAL_UNBAN',
+      `Admin manually unbanned ${user.email}. Score reset to ${rehabilitatedScore}`
+    );
+
+    res.json({
+      message: `User ${user.email} has been unbanned. Reputation score reset to ${rehabilitatedScore}.`,
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 module.exports = {
   getAllUsers,
@@ -248,5 +305,7 @@ module.exports = {
   approveApplication,
   rejectApplication,
   getAuditLogs,
-  getAnalytics
+  getAnalytics,
+  adjustReputation,
+  unbanUser,
 };

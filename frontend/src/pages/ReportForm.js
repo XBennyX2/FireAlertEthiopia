@@ -7,43 +7,35 @@ import MapPicker from '../components/MapPicker';
 import VoiceReportButton from '../components/VoiceReportButton';
 import NotificationBell from '../components/NotificationBell';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import '../dashboard.css';
 import LiveCameraCapture from '../components/LiveCameraCapture';
-
-const FIRE_TYPES_EN = [
-  { value: 'residential', label: '🏠 Residential' },
-  { value: 'commercial',  label: '🏢 Commercial'  },
-  { value: 'vehicle',     label: '🚗 Vehicle'     },
-  { value: 'industrial',  label: '🏭 Industrial'  },
-  { value: 'wildland',    label: '🌲 Wildland'    },
-  { value: 'other',       label: '❓ Other'        },
-];
+import { useToast } from '../context/ToastContext';
+import '../dashboard.css';
 
 export default function ReportForm() {
-  const navigate         = useNavigate();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { t, language }  = useLanguage();
+  const { t, language } = useLanguage();
+  const { toast } = useToast();
 
   // ── Form fields ───────────────────────────────────────────────────
   const [description, setDescription] = useState('');
-  const [fireType,    setFireType]    = useState('');
-  const [location,    setLocation]    = useState({
-    lat: null, lng: null, address: ''
-  });
-  const [mediaFile,    setMediaFile]    = useState(null);
+  const [fireType, setFireType] = useState('');
+  const [location, setLocation] = useState({ lat: null, lng: null, address: '' });
+  const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
 
   // ── UI state ──────────────────────────────────────────────────────
-  const [gpsLoading,  setGpsLoading]  = useState(true);
-  const [gpsError,    setGpsError]    = useState('');
-  const [submitting,  setSubmitting]  = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(true);
+  const [gpsError, setGpsError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [success,     setSuccess]     = useState(false);
-  const [showCamera,  setShowCamera]  = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [isLiveCaptured, setIsLiveCaptured] = useState(false);
 
   // ── Auto-fetch GPS on mount ───────────────────────────────────────
-  useEffect(() => { fetchGPS(); }, []);
+  useEffect(() => {
+    fetchGPS();
+  }, []);
 
   function fetchGPS() {
     if (!navigator.geolocation) {
@@ -57,9 +49,8 @@ export default function ReportForm() {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        // Reverse geocode to get address
         try {
-          const res  = await fetch(
+          const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
             { headers: { 'Accept-Language': 'en' } }
           );
@@ -71,7 +62,7 @@ export default function ReportForm() {
         setGpsLoading(false);
       },
       () => {
-        // GPS denied — default to Addis Ababa center
+        // Fallback default: Addis Ababa center
         setLocation({ lat: 9.0300, lng: 38.7400, address: '' });
         setGpsError('Could not get your exact location. You can drag the pin to set it manually.');
         setGpsLoading(false);
@@ -86,16 +77,6 @@ export default function ReportForm() {
   }
 
   // ── File handling ─────────────────────────────────────────────────
-  function handleFileChange(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setMediaFile(file);
-    if (file.type.startsWith('image/')) {
-      setMediaPreview(URL.createObjectURL(file));
-    } else {
-      setMediaPreview(null);
-    }
-  }
   function removeFile() {
     setMediaFile(null);
     setMediaPreview(null);
@@ -111,21 +92,13 @@ export default function ReportForm() {
       return;
     }
     if (fields.description) setDescription(fields.description);
-    if (fields.fire_type)   setFireType(fields.fire_type);
+    if (fields.fire_type) setFireType(fields.fire_type);
   }
 
   // ── GPS Validation ────────────────────────────────────────────────
   function validateGPS(lat, lng) {
-    // Must be within Ethiopia's bounding box
-    const inEthiopia = (
-      lat >= 3.4  && lat <= 15.0 &&
-      lng >= 33.0 && lng <= 48.0
-    );
-    // Addis Ababa area check (more strict for city deployments)
-    const inAddisArea = (
-      lat >= 8.8  && lat <= 9.2 &&
-      lng >= 38.5 && lng <= 39.0
-    );
+    const inEthiopia = lat >= 3.4 && lat <= 15.0 && lng >= 33.0 && lng <= 48.0;
+    const inAddisArea = lat >= 8.8 && lat <= 9.2 && lng >= 38.5 && lng <= 39.0;
     return { inEthiopia, inAddisArea, valid: inEthiopia };
   }
 
@@ -135,12 +108,11 @@ export default function ReportForm() {
     setSubmitError('');
 
     if (!description.trim()) return setSubmitError('Please describe the incident.');
-    if (!fireType)            return setSubmitError('Please select the fire type.');
+    if (!fireType) return setSubmitError('Please select the fire type.');
     if (!location.lat || !location.lng) {
       return setSubmitError('Location is required. Allow GPS or drag the pin on the map.');
     }
 
-    // GPS validation
     const gpsCheck = validateGPS(location.lat, location.lng);
     if (!gpsCheck.valid) {
       return setSubmitError('The selected location appears to be outside Ethiopia. Please check the pin on the map.');
@@ -150,16 +122,13 @@ export default function ReportForm() {
     try {
       const formData = new FormData();
       formData.append('description', description);
-      formData.append('fire_type',   fireType);
-      formData.append('lat',         location.lat);
-      formData.append('lng',         location.lng);
-      formData.append('address',     location.address);
-      
-      // Updated GPS validation logic & added live-captured flag
-      const gpsCheckResult = validateGPS(location.lat, location.lng); 
-      formData.append('gps_validated',   gpsCheckResult?.inAddisArea ? 'true' : 'false');
-      formData.append('gps_score',       String(gpsCheckResult?.inAddisArea ? 100 : 50));
-      formData.append('media_is_live',   String(isLiveCaptured));
+      formData.append('fire_type', fireType);
+      formData.append('lat', location.lat);
+      formData.append('lng', location.lng);
+      formData.append('address', location.address);
+      formData.append('gps_validated', gpsCheck.inAddisArea ? 'true' : 'false');
+      formData.append('gps_score', String(gpsCheck.inAddisArea ? 100 : 50));
+      formData.append('media_is_live', String(isLiveCaptured));
       
       if (mediaFile) formData.append('media', mediaFile);
 
@@ -167,36 +136,45 @@ export default function ReportForm() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setSuccess(true);
-      setTimeout(() => navigate('/dashboard'), 2500);
-
+      // Show success toast notification and redirect with immediate timer
+      toast.success('Fire report submitted successfully. Responders have been notified.');
+      setTimeout(() => navigate('/dashboard'), 1500);
     } catch (err) {
-      setSubmitError(err.response?.data?.message || 'Submission failed. Please try again.');
+      const errorMsg = err.response?.data?.message || 'Submission failed. Please try again.';
+      setSubmitError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }
   }
 
-  // ── Success screen ────────────────────────────────────────────────
-  if (success) {
+  // ── Active Enforcement Gatekeeper ──────────────────────────────────
+  if (user?.isRestricted || user?.isBanned) {
     return (
-      <div className="dash-page" style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
-        <div style={{ textAlign:'center', padding:'2rem' }}>
-          <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>✅</div>
-          <h2 style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:'1.5rem', color:'#f0ede8', marginBottom:'0.5rem' }}>
-            {t.reportSubmitted}
+      <div className="dash-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center', padding: '2rem', maxWidth: 400 }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
+            {user?.isBanned ? '⛔' : '🚫'}
+          </div>
+          <h2 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1.25rem', color: '#f0ede8', marginBottom: '0.5rem' }}>
+            {user?.isBanned ? 'Account Banned' : 'Account Restricted'}
           </h2>
-          <p style={{ color:'#666', fontSize:'0.9rem' }}>{t.redirecting}</p>
+          <p style={{ color: '#666', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+            {user?.isBanned
+              ? 'Your account has been banned due to repeated false reports. Contact support to appeal this decision.'
+              : `Your account is restricted (score: ${user?.reputationScore}). You cannot submit new reports until your reputation improves above 30.`}
+          </p>
+          <Link to="/dashboard" className="btn-secondary">← Back to Dashboard</Link>
         </div>
       </div>
     );
   }
 
   const fireTypeOptions = Object.entries(t.fireTypes || {}).map(([value, label]) => ({ value, label }));
+  const gpsCheckResult = location.lat ? validateGPS(location.lat, location.lng) : null;
 
   return (
     <div className="dash-page">
-
       {/* ── Top Bar ─────────────────────────────────────────────── */}
       <nav className="dash-topbar">
         <Link to="/" className="dash-topbar-logo">
@@ -212,7 +190,6 @@ export default function ReportForm() {
       </nav>
 
       <div className="dash-content" style={{ maxWidth: 760 }}>
-
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="dash-header">
           <div>
@@ -224,20 +201,16 @@ export default function ReportForm() {
 
         <div className="card">
           {submitError && (
-            <div style={{ background:'rgba(230,60,47,0.1)', border:'1px solid rgba(230,60,47,0.25)', borderRadius:8, padding:'0.75rem 1rem', fontSize:'0.85rem', color:'#f87c74', marginBottom:'1.25rem' }}>
+            <div style={{ background: 'rgba(230,60,47,0.1)', border: '1px solid rgba(230,60,47,0.25)', borderRadius: 8, padding: '0.75rem 1rem', fontSize: '0.85rem', color: '#f87c74', marginBottom: '1.25rem' }}>
               {submitError}
             </div>
           )}
 
           <form onSubmit={handleSubmit} noValidate>
-
             {/* ── Voice Report Button ──────────────────────── */}
             <div className="form-group">
-              <VoiceReportButton
-                language={language}
-                onFieldsFilled={handleVoiceResult}
-              />
-              <span className="form-hint" style={{ marginTop:'0.4rem', display:'block', textAlign:'center' }}>
+              <VoiceReportButton language={language} onFieldsFilled={handleVoiceResult} />
+              <span className="form-hint" style={{ marginTop: '0.4rem', display: 'block', textAlign: 'center' }}>
                 {language === 'am' ? 'ወይም ቅጹን በእጅ ይሙሉ' : 'Or fill the form manually below'}
               </span>
             </div>
@@ -245,11 +218,7 @@ export default function ReportForm() {
             {/* ── Fire Type ────────────────────────────────── */}
             <div className="form-group">
               <label className="form-label">{t.fireType}</label>
-              <select
-                className="form-select"
-                value={fireType}
-                onChange={e => setFireType(e.target.value)}
-              >
+              <select className="form-select" value={fireType} onChange={e => setFireType(e.target.value)}>
                 <option value="">{t.selectCategory}</option>
                 {fireTypeOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -275,10 +244,8 @@ export default function ReportForm() {
             {/* ── Map ──────────────────────────────────────── */}
             <div className="form-group">
               <label className="form-label">{t.locationGPS}</label>
-
-              {/* GPS status bar */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.6rem' }}>
-                <span style={{ fontSize:'0.78rem', color: gpsLoading ? '#f4820a' : location.lat ? '#22c55e' : '#666' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                <span style={{ fontSize: '0.78rem', color: gpsLoading ? '#f4820a' : location.lat ? '#22c55e' : '#666' }}>
                   {gpsLoading
                     ? '📡 ' + t.detectingLocation
                     : location.lat
@@ -290,45 +257,40 @@ export default function ReportForm() {
                   className="btn-secondary"
                   onClick={fetchGPS}
                   disabled={gpsLoading}
-                  style={{ fontSize:'0.75rem', padding:'0.3rem 0.75rem' }}
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.75rem' }}
                 >
                   {gpsLoading ? '...' : '📍 ' + t.useMyLocation}
                 </button>
               </div>
 
               {gpsError && (
-                <div style={{ fontSize:'0.78rem', color:'#f4820a', marginBottom:'0.5rem' }}>
+                <div style={{ fontSize: '0.78rem', color: '#f4820a', marginBottom: '0.5rem' }}>
                   ⚠️ {gpsError}
                 </div>
               )}
 
-              {/* The Map */}
-              {!gpsLoading && (
+              {!gpsLoading ? (
                 <MapPicker
                   position={location.lat ? { lat: location.lat, lng: location.lng } : null}
                   onPositionChange={handleMapPositionChange}
                   height={340}
                 />
-              )}
-
-              {gpsLoading && (
-                <div style={{ height:340, background:'#111', borderRadius:10, border:'1px solid #2a2a2a', display:'flex', alignItems:'center', justifyContent:'center', color:'#444', fontSize:'0.875rem' }}>
+              ) : (
+                <div style={{ height: 340, background: '#111', borderRadius: 10, border: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: '0.875rem' }}>
                   📡 Detecting your location…
                 </div>
               )}
 
-              {/* Address field */}
               <input
                 className="form-input"
                 placeholder={t.addressPlaceholder}
                 value={location.address}
                 onChange={e => setLocation(p => ({ ...p, address: e.target.value }))}
-                style={{ marginTop:'0.6rem' }}
+                style={{ marginTop: '0.6rem' }}
               />
 
-              {/* GPS validation warning */}
-              {location.lat && !validateGPS(location.lat, location.lng).inAddisArea && validateGPS(location.lat, location.lng).valid && (
-                <div style={{ fontSize:'0.78rem', color:'#f4820a', marginTop:'0.4rem' }}>
+              {gpsCheckResult && !gpsCheckResult.inAddisArea && gpsCheckResult.valid && (
+                <div style={{ fontSize: '0.78rem', color: '#f4820a', marginTop: '0.4rem' }}>
                   ⚠️ Location is outside the Addis Ababa area. Please confirm this is correct.
                 </div>
               )}
@@ -337,53 +299,37 @@ export default function ReportForm() {
             {/* ── Media Upload ──────────────────────────────── */}
             <div className="form-group">
               <label className="form-label">{t.mediaLabel}</label>
-
               {!mediaFile ? (
                 <div
-                  style={{ border:'2px dashed #2a2a2a', borderRadius:10, padding:'2rem', textAlign:'center', cursor:'pointer', transition:'border-color 0.2s' }}
+                  style={{ border: '2px dashed #2a2a2a', borderRadius: 10, padding: '2rem', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s' }}
                   onClick={() => setShowCamera(true)}
                   onMouseOver={e => e.currentTarget.style.borderColor = '#e63c2f'}
-                  onMouseOut={e  => e.currentTarget.style.borderColor = '#2a2a2a'}
+                  onMouseOut={e => e.currentTarget.style.borderColor = '#2a2a2a'}
                 >
-                  <div style={{ fontSize:'1.75rem', marginBottom:'0.5rem' }}>📷</div>
-                  <div style={{ fontSize:'0.85rem', color:'#666' }}>
+                  <div style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>📷</div>
+                  <div style={{ fontSize: '0.85rem', color: '#666' }}>
                     {language === 'am' ? 'ቀጥታ ፎቶ ለማንሳት ጠቅ ያድርጉ' : 'Tap to take a live photo'}
                   </div>
-                  <div style={{ fontSize:'0.75rem', color:'#444', marginTop:'0.25rem' }}>
-                    {language === 'am'
-                      ? 'ከቤተ-ስዕል ምስሎችን መጫን አይፈቀድም'
-                      : 'Gallery uploads are not allowed — camera only'}
+                  <div style={{ fontSize: '0.75rem', color: '#444', marginTop: '0.25rem' }}>
+                    {language === 'am' ? 'ከቤተ-ስዕል ምስሎችን መጫን አይፈቀድም' : 'Gallery uploads are not allowed — camera only'}
                   </div>
                 </div>
               ) : (
-                <div style={{ position:'relative', border:'1px solid #2a2a2a', borderRadius:10, overflow:'hidden' }}>
+                <div style={{ position: 'relative', border: '1px solid #2a2a2a', borderRadius: 10, overflow: 'hidden' }}>
                   {mediaPreview && (
-                    <img src={mediaPreview} alt="preview" style={{ width:'100%', maxHeight:200, objectFit:'cover', display:'block' }} />
+                    <img src={mediaPreview} alt="preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
                   )}
-
-                  {/* Live captured badge */}
                   {isLiveCaptured && (
-                    <div style={{
-                      position:'absolute', top:8, left:8,
-                      background:'rgba(34,197,94,0.92)', color:'#fff',
-                      padding:'0.25rem 0.65rem', borderRadius:999,
-                      fontSize:'0.68rem', fontWeight:700, letterSpacing:'0.03em',
-                    }}>
+                    <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(34,197,94,0.92)', color: '#fff', padding: '0.25rem 0.65rem', borderRadius: 999, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.03em' }}>
                       ✓ {language === 'am' ? 'ቀጥታ ተነስቷል' : 'Live Captured'}
                     </div>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={removeFile}
-                    style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.7)', color:'#fff', border:'none', borderRadius:6, padding:'0.3rem 0.65rem', cursor:'pointer', fontSize:'0.75rem' }}
-                  >
+                  <button type="button" onClick={removeFile} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: 6, padding: '0.3rem 0.65rem', cursor: 'pointer', fontSize: '0.75rem' }}>
                     {t.removeFile}
                   </button>
                 </div>
               )}
 
-              {/* Camera overlay */}
               {showCamera && (
                 <LiveCameraCapture
                   language={language}
@@ -398,16 +344,12 @@ export default function ReportForm() {
               )}
             </div>
 
-            {/* ── Submit ────────────────────────────────────── */}
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={submitting}
-              style={{ width:'100%', padding:'0.9rem' }}
-            >
-              {submitting ? t.submittingReport : t.submitReport}
-            </button>
-
+            {/* ── Dynamic Action Button ─────────────────────── */}
+            {!user?.isRestricted && !user?.isBanned && (
+              <button type="submit" className="btn-primary" disabled={submitting} style={{ width: '100%', padding: '0.9rem' }}>
+                {submitting ? t.submittingReport : `🚨 ${t.reportAFire}`}
+              </button>
+            )}
           </form>
         </div>
       </div>

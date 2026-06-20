@@ -3,10 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import NotificationBell from '../components/NotificationBell';
 import IncidentMap from '../components/IncidentMap';
 import LiveTrackingMap from '../components/LiveTrackingMap';
 import API from '../api/axios';
+import { useToast } from '../context/ToastContext';
 import '../dashboard.css';
 
 function fmtDate(iso) {
@@ -44,6 +44,7 @@ export default function ResponderDashboard() {
   const { user, logout } = useAuth();
   const { t }            = useLanguage();
   const navigate         = useNavigate();
+  const { toast }        = useToast();
 
   const [incidents,         setIncidents]         = useState([]);
   const [loading,           setLoading]           = useState(true);
@@ -78,13 +79,20 @@ export default function ResponderDashboard() {
     setActionLoading(incidentId + action);
     try {
       await API.put(`/responder/incidents/${incidentId}/${action}`);
-      // Stop tracking if the incident was resolved or rejected
       if (action === 'resolve' || action === 'reject') {
         setTrackingIncidentId(null);
       }
       await loadIncidents();
+      
+      const messages = {
+        verify:   'Incident verified successfully.',
+        dispatch: 'Units dispatched to incident location.',
+        resolve:  'Incident marked as resolved.',
+        reject:   'Report rejected. Reporter has been notified.',
+      };
+      toast.success(messages[action] || 'Action completed.');
     } catch (err) {
-      alert(err.response?.data?.message || `Action "${action}" failed.`);
+      toast.error(err.response?.data?.message || `Action "${action}" failed.`);
     } finally {
       setActionLoading('');
     }
@@ -108,6 +116,31 @@ export default function ResponderDashboard() {
         </Link>
         <div className="dash-topbar-right">
           <LanguageSwitcher />
+          <Link
+            to="/profile"
+            style={{
+              width:          32,
+              height:         32,
+              borderRadius:   '50%',
+              background:     user?.profilePhoto ? 'transparent' : 'linear-gradient(135deg, #e63c2f, #f4820a)',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              overflow:       'hidden',
+              border:         '1px solid #2a2a2a',
+              textDecoration: 'none',
+              flexShrink:     0,
+              fontSize:       '0.75rem',
+              fontFamily:     "'Syne',sans-serif",
+              fontWeight:     800,
+              color:          '#fff',
+            }}
+          >
+            {user?.profilePhoto
+              ? <img src={user.profilePhoto} alt="profile" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              : user?.name?.charAt(0)?.toUpperCase() || '?'
+            }
+          </Link>
 
           {/* Availability Toggle */}
           <div className="toggle-wrap" onClick={() => setOnDuty(v => !v)}>
@@ -121,7 +154,6 @@ export default function ResponderDashboard() {
 
           <span className="dash-role-badge">{t.responder}</span>
           <span className="dash-user-name">{user?.name}</span>
-          <NotificationBell />
           <button
             className="dash-logout-btn"
             onClick={() => { logout(); navigate('/'); }}
@@ -246,20 +278,30 @@ export default function ResponderDashboard() {
                       </div>
                     </div>
 
-                    {/* AI Trust Score */}
-                    {incident.ai_trust_score !== undefined && (
-                      <div style={{
-                        padding:      '0.25rem 0.6rem',
-                        background:   incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.12)' : 'rgba(244,130,10,0.12)',
-                        border:       `1px solid ${incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.25)' : 'rgba(244,130,10,0.25)'}`,
-                        borderRadius: 6,
-                        fontSize:     '0.7rem',
-                        fontWeight:   600,
-                        color:        incident.ai_trust_score >= 75 ? '#22c55e' : '#f4820a',
-                      }}>
-                        AI {incident.ai_trust_score}%
-                      </div>
-                    )}
+                    {/* Meta actions & badges */}
+                    <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                      <Link  
+                        to={`/incidents/${incident._id}`}  
+                        className="btn-secondary"  
+                        style={{ fontSize:'0.75rem', padding:'0.3rem 0.6rem', textDecoration:'none', whiteSpace:'nowrap' }}
+                      >  
+                        View Details →
+                      </Link>
+
+                      {incident.ai_trust_score !== undefined && (
+                        <div style={{
+                          padding:      '0.25rem 0.6rem',
+                          background:   incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.12)' : 'rgba(244,130,10,0.12)',
+                          border:       `1px solid ${incident.ai_trust_score >= 75 ? 'rgba(34,197,94,0.25)' : 'rgba(244,130,10,0.25)'}`,
+                          borderRadius: 6,
+                          fontSize:     '0.7rem',
+                          fontWeight:   600,
+                          color:        incident.ai_trust_score >= 75 ? '#22c55e' : '#f4820a',
+                        }}>
+                          AI {incident.ai_trust_score}%
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* ── Media preview ────────────────────────── */}

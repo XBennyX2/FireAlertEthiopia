@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-
+import ProfilePage from './pages/ProfilePage';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -13,9 +13,14 @@ import NotificationsPage from './pages/NotificationsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SafetyAwarenessPage from './pages/SafetyAwarenessPage';
 import { LanguageProvider } from './context/LanguageContext';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage  from './pages/ResetPasswordPage';
+import { ToastProvider } from './context/ToastContext';
+import IncidentDetailPage from './pages/IncidentDetailPage';
 
 function App() {
   return (
+    <ToastProvider>
     <LanguageProvider>
       <AuthProvider>
         <Router>
@@ -25,6 +30,13 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/safety" element={<SafetyAwarenessPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password"  element={<ResetPasswordPage />} />
+          <Route path="/incidents/:id" element={
+            <ProtectedRoute allowedRoles={['user', 'responder', 'admin']}>
+              <IncidentDetailPage />
+            </ProtectedRoute>
+          } />
 
           {/* User-only routes */}
           <Route path="/dashboard" element={
@@ -61,10 +73,18 @@ function App() {
               <AnalyticsPage />
             </ProtectedRoute>
           } />
+          <Route path="/profile" element={
+            <ProtectedRoute allowedRoles={['user', 'responder', 'admin']}>
+              <ProfilePage />
+            </ProtectedRoute>
+          } />
         </Routes>
+        {/* Public routes */}
+
       </Router>
     </AuthProvider>
     </LanguageProvider>
+    </ToastProvider>
   );
 }
 

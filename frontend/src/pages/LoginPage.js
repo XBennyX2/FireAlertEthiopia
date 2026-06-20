@@ -5,11 +5,15 @@ import API from '../api/axios';
 import '../auth.css';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useToast } from '../context/ToastContext';
 
 export default function LoginPage() {
   const { t } = useLanguage();
   const navigate  = useNavigate();
   const { login } = useAuth();
+  const [isLocked, setIsLocked] = useState(false);
+  const { toast } = useToast();
+
 
   // ── Form state ────────────────────────────────────────────────────
   const [email,    setEmail]    = useState('');
@@ -45,32 +49,43 @@ export default function LoginPage() {
   }
 
   // ── Submit handler ────────────────────────────────────────────────
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
+async function handleSubmit(e) {
+  e.preventDefault();
+  setError('');
 
-    if (!validate()) return;
+  if (!validate()) return;
 
-    setLoading(true);
-    try {
-      const { data } = await API.post('/auth/login', { email, password });
+  setLoading(true);
+  try {
+    const { data } = await API.post('/auth/login', { email, password });
+    login(data);
 
-      // Save user + token through AuthContext
-      login(data);
+    // Toast on successful login
+    toast.success('Welcome back!');
 
-      // Redirect based on role
-      if (data.role === 'admin')     navigate('/admin');
-      else if (data.role === 'responder') navigate('/responder');
-      else navigate('/dashboard');
+    if (data.role === 'admin')          navigate('/admin');
+    else if (data.role === 'responder') navigate('/responder');
+    else                                navigate('/dashboard');
 
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Login failed. Please try again.';
-      setError(msg);
-    } finally {
-      setLoading(false);
+  } catch (err) {
+    const status  = err.response?.status;
+    const message = err.response?.data?.message || 'Login failed. Please try again.';
+
+    // Toast on error block
+    toast.error(message);
+
+    if (status === 423) {
+      // Account locked
+      setError(message);
+      setIsLocked(true);
+    } else {
+      setError(message);
+      setIsLocked(false);
     }
+  } finally {
+    setLoading(false);
   }
-
+}
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="auth-page">
@@ -125,6 +140,19 @@ export default function LoginPage() {
               autoComplete="current-password"
             />
             {errors.password && <span className="form-error">{errors.password}</span>}
+          </div>
+          {error && (
+            <div className="auth-global-error">
+              {isLocked && '🔒 '}{error}
+            </div>
+          )}
+          <div style={{ textAlign:'right', marginTop:'-0.5rem', marginBottom:'0.25rem' }}>
+            <Link
+              to="/forgot-password"
+              style={{ fontSize:'0.78rem', color:'var(--fire-orange)', textDecoration:'none' }}
+            >
+              Forgot password?
+            </Link>
           </div>
 
           {/* Submit */}

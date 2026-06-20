@@ -6,6 +6,17 @@ const incidentSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  
+  statusHistory: [
+  {
+    status:    { type: String },
+    timestamp: { type: Date, default: Date.now },
+    note:      { type: String, default: '' },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  }
+],
+rejectionReason: { type: String, default: '' },
+
   description: {
     type: String,
     required: true

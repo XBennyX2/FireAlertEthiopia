@@ -151,7 +151,7 @@ function fmtTime(iso) {
 }
 
 export default function NotificationBell() {
-  const { user }    = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate    = useNavigate();
   const [open, setOpen]              = useState(false);
   const [notifications, setNotifs]   = useState([]);
@@ -168,14 +168,19 @@ export default function NotificationBell() {
     });
 
     const addNotif = (type, data) => {
-      setNotifs(prev => [{
-        id:        Date.now(),
-        type,
-        message:   data.message || 'Incident updated.',
-        timestamp: new Date().toISOString(),
-        read:      false,
-      }, ...prev.slice(0, 19)]); // keep max 20
-    };
+  setNotifs(prev => [{
+    id:        Date.now(),
+    type,
+    message:   data.message || 'Incident updated.',
+    timestamp: new Date().toISOString(),
+    read:      false,
+  }, ...prev.slice(0, 19)]);
+
+  // Refresh user data when status changes affect reputation
+  if (['verified', 'resolved', 'rejected'].includes(type)) {
+    refreshUser();
+  }
+};
 
     socket.on('incidentUpdate', d => addNotif('incidentUpdate', d));
     ['verified','dispatched','resolved','rejected'].forEach(ev => {
