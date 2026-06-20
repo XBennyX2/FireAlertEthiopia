@@ -186,6 +186,7 @@ export default function NotificationBell() {
     ['verified','dispatched','resolved','rejected'].forEach(ev => {
       socket.on(ev, d => addNotif(ev, d));
     });
+    socket.on('forumReply', d => addNotif('forumReply', d));
 
     return () => socket.disconnect();
   }, [user]);

@@ -8,6 +8,7 @@ import IncidentMap from '../components/IncidentMap';
 import LiveTrackingMap from '../components/LiveTrackingMap';
 import API from '../api/axios';
 import '../dashboard.css';
+import SearchFilterBar from '../components/SearchFilterBar';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -36,6 +37,10 @@ export default function UserDashboard() {
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState('');
   const [watchingIncidentId, setWatchingIncidentId] = useState(null);
+  const [search,     setSearch]     = useState('');
+  const [filterStatus,   setFilterStatus]   = useState('');
+  const [filterFireType, setFilterFireType] = useState('');
+  const [sortBy,     setSortBy]     = useState('newest');
 
   useEffect(() => {
     async function load() {
@@ -61,14 +66,43 @@ export default function UserDashboard() {
     resolved: incidents.filter(i => i.status === 'resolved').length,
   };
 
+  // Process data locally based on state inputs
+  const filteredIncidents = incidents
+    .filter(i => {
+      const matchSearch = !search ||
+        i.description?.toLowerCase().includes(search.toLowerCase()) ||
+        i._id?.toLowerCase().includes(search.toLowerCase()) ||
+        i.location?.address?.toLowerCase().includes(search.toLowerCase());
+
+      const matchStatus   = !filterStatus   || i.status    === filterStatus;
+      const matchFireType = !filterFireType || i.fire_type === filterFireType;
+
+      return matchSearch && matchStatus && matchFireType;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'newest')   return new Date(b.reportedAt) - new Date(a.reportedAt);
+      if (sortBy === 'oldest')   return new Date(a.reportedAt) - new Date(b.reportedAt);
+      if (sortBy === 'severity') {
+        const order = { High: 3, Medium: 2, Low: 1 };
+        return (order[b.severity] || 0) - (order[a.severity] || 0);
+      }
+      return 0;
+    });
+
+  const hasActiveFilters = search || filterStatus || filterFireType;
+
   return (
     <div className="dash-page">
 
       {/* ── Top Bar ─────────────────────────────────────────────── */}
       <nav className="dash-topbar">
+
         <Link to="/" className="dash-topbar-logo">
           <div className="dash-topbar-logo-icon">🔥</div>
           <span className="dash-topbar-logo-text">{t.appName}</span>
+        </Link>
+        <Link to="/forum" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>
+          💬 Forum
         </Link>
         <div className="dash-topbar-right">
           <LanguageSwitcher />
@@ -120,6 +154,49 @@ export default function UserDashboard() {
           <Link to="/report" className="btn-primary">🚨 {t.reportAFire}</Link>
         </div>
 
+        {/* ── Search and Filter Controls ───────────────────────── */}
+        <SearchFilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          placeholder="Search by description, ID, or address…"
+          filters={[
+            {
+              key:         'status',
+              value:       filterStatus,
+              onChange:    setFilterStatus,
+              placeholder: 'All Statuses',
+              options: [
+                { value:'pending',    label:'Pending'    },
+                { value:'verified',   label:'Verified'   },
+                { value:'dispatched', label:'Dispatched' },
+                { value:'resolved',   label:'Resolved'   },
+                { value:'rejected',   label:'Rejected'   },
+              ],
+            },
+            {
+              key:         'fireType',
+              value:       filterFireType,
+              onChange:    setFilterFireType,
+              placeholder: 'All Fire Types',
+              options: [
+                { value:'residential', label:'Residential' },
+                { value:'commercial',  label:'Commercial'  },
+                { value:'vehicle',     label:'Vehicle'     },
+                { value:'industrial',  label:'Industrial'  },
+                { value:'wildland',    label:'Wildland'    },
+                { value:'other',       label:'Other'       },
+              ],
+            },
+          ]}
+          sortOptions={[
+            { value:'newest',   label:'Sort: Newest First'  },
+            { value:'oldest',   label:'Sort: Oldest First'  },
+            { value:'severity', label:'Sort: High Severity' },
+          ]}
+          sortValue={sortBy}
+          onSortChange={setSortBy}
+        />
+
         {/* ── Stats Row ───────────────────────────────────────── */}
         <div className="stat-grid">
           <div className="stat-card">
@@ -148,7 +225,7 @@ export default function UserDashboard() {
             </div>
             <IncidentMap
               key={incidents.map(i => i._id + i.status).join('-')}
-              incidents={incidents}
+              incidents={filteredIncidents}
               height={320}
             />
           </div>
@@ -162,23 +239,36 @@ export default function UserDashboard() {
           <div className="loading-state" style={{ color:'#f87c74' }}>{error}</div>
         )}
 
-        {!loading && !error && incidents.length === 0 && (
+        {/* ── Empty States (No data OR no matching search queries) ── */}
+        {!loading && !error && filteredIncidents.length === 0 && (
           <div className="empty-state">
             <div className="empty-state-icon">📋</div>
-            <div>{t.noReports}</div>
-            <Link
-              to="/report"
-              className="btn-primary"
-              style={{ marginTop:'1rem', display:'inline-block' }}
-            >
-              {t.submitFirst}
-            </Link>
+            <div>{hasActiveFilters ? 'No reports match your filters.' : t.noReports}</div>
+            
+            {!hasActiveFilters ? (
+              <Link
+                to="/report"
+                className="btn-primary"
+                style={{ marginTop:'1rem', display:'inline-block' }}
+              >
+                {t.submitFirst}
+              </Link>
+            ) : (
+              <button
+                className="btn-secondary"
+                style={{ marginTop:'1rem' }}
+                onClick={() => { setSearch(''); setFilterStatus(''); setFilterFireType(''); }}
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
 
-        {!loading && incidents.length > 0 && (
+        {/* ── Incident Render Cards ───────────────────────────── */}
+        {!loading && filteredIncidents.length > 0 && (
           <div className="incident-grid">
-            {incidents.map(incident => {
+            {filteredIncidents.map(incident => {
               const rawType        = incident.fire_type?.toLowerCase() || 'other';
               const translatedType = t.fireTypes?.[rawType] || incident.fire_type || t.fireTypes?.other;
               const isWatching     = watchingIncidentId === incident._id;

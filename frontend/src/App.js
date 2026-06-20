@@ -17,6 +17,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage  from './pages/ResetPasswordPage';
 import { ToastProvider } from './context/ToastContext';
 import IncidentDetailPage from './pages/IncidentDetailPage';
+import ForumPage     from './pages/ForumPage';
+import ForumPostPage from './pages/ForumPostPage';
 
 function App() {
   return (
@@ -37,6 +39,16 @@ function App() {
               <IncidentDetailPage />
             </ProtectedRoute>
           } />
+          <Route path="/forum" element={
+  <ProtectedRoute allowedRoles={['user', 'responder', 'admin']}>
+    <ForumPage />
+  </ProtectedRoute>
+} />
+<Route path="/forum/:id" element={
+  <ProtectedRoute allowedRoles={['user', 'responder', 'admin']}>
+    <ForumPostPage />
+  </ProtectedRoute>
+} />
 
           {/* User-only routes */}
           <Route path="/dashboard" element={

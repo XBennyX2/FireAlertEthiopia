@@ -81,7 +81,7 @@ app.use((req, res, next) => {
 
 // ── HTTP parameter pollution prevention ──────────────────────────
 app.use(hpp());
-
+app.use('/api/forum', require('./routes/forumRoutes'));
 // ── Static files ──────────────────────────────────────────────────
 app.use('/uploads', express.static('uploads'));
 

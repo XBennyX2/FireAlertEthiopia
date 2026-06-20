@@ -26,10 +26,12 @@ export default function NotificationsPage() {
     dispatched:     { label: t.unitsDispatched || 'Units Dispatched', color: '#a855f7' },
     resolved:       { label: t.incidentResolved || 'Incident Resolved', color: '#22c55e' },
     rejected:       { label: t.reportRejected || 'Report Rejected',  color: '#e63c2f' },
+    forumReply: { label: 'Forum Reply', color: '#3b82f6' },
   };
 
   function getEventMeta(type) {
     return EVENT_META[type] || { label: type || t.notification || 'Notification', color: '#f4820a' };
+    
   }
 
   const [notifications, setNotifications] = useState([
