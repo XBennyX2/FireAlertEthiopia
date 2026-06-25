@@ -8,8 +8,10 @@ import VoiceReportButton from '../components/VoiceReportButton';
 import NotificationBell from '../components/NotificationBell';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import LiveCameraCapture from '../components/LiveCameraCapture';
-import { useToast } from '../context/ToastContext';
 import '../dashboard.css';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { saveOfflineReport } from '../utils/offlineDB';
+import { useToast } from '../context/ToastContext';
 
 export default function ReportForm() {
   const navigate = useNavigate();
@@ -21,8 +23,9 @@ export default function ReportForm() {
   const [description, setDescription] = useState('');
   const [fireType, setFireType] = useState('');
   const [location, setLocation] = useState({ lat: null, lng: null, address: '' });
-  const [mediaFile, setMediaFile] = useState(null);
-  const [mediaPreview, setMediaPreview] = useState(null);
+  // ── Multi-file state (max 5) ──────────────────────────────────────
+  const [mediaFiles, setMediaFiles] = useState([]);       // [{ file, previewUrl, isLive }]
+  const MAX_FILES = 5;
 
   // ── UI state ──────────────────────────────────────────────────────
   const [gpsLoading, setGpsLoading] = useState(true);
@@ -30,7 +33,7 @@ export default function ReportForm() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [showCamera, setShowCamera] = useState(false);
-  const [isLiveCaptured, setIsLiveCaptured] = useState(false);
+  const isOnline = useOnlineStatus();
 
   // ── Auto-fetch GPS on mount ───────────────────────────────────────
   useEffect(() => {
@@ -77,10 +80,8 @@ export default function ReportForm() {
   }
 
   // ── File handling ─────────────────────────────────────────────────
-  function removeFile() {
-    setMediaFile(null);
-    setMediaPreview(null);
-    setIsLiveCaptured(false);
+  function removeFile(index) {
+    setMediaFiles(prev => prev.filter((_, i) => i !== index));
   }
 
   // ── Voice result ──────────────────────────────────────────────────
@@ -95,54 +96,106 @@ export default function ReportForm() {
     if (fields.fire_type) setFireType(fields.fire_type);
   }
 
-  // ── GPS Validation ────────────────────────────────────────────────
+  // ── GPS Validation Helper ─────────────────────────────────────────
   function validateGPS(lat, lng) {
     const inEthiopia = lat >= 3.4 && lat <= 15.0 && lng >= 33.0 && lng <= 48.0;
     const inAddisArea = lat >= 8.8 && lat <= 9.2 && lng >= 38.5 && lng <= 39.0;
     return { inEthiopia, inAddisArea, valid: inEthiopia };
   }
 
+  // ── Form Validation ───────────────────────────────────────────────
+  function validate() {
+    setSubmitError('');
+    if (mediaFiles.length > MAX_FILES) {
+      setSubmitError(`Maximum ${MAX_FILES} files allowed per report.`);
+      return false;
+    }
+    if (!fireType) {
+      setSubmitError(language === 'am' ? 'እባክዎ የእሳት አደጋ ዓይነት ይምረጡ' : 'Please select a fire type.');
+      return false;
+    }
+    if (!description.trim() || description.trim().length < 10) {
+      setSubmitError(language === 'am' ? 'እባክዎ ቢያንስ 10 ቁምፊዎች ያለው መግለጫ ያስገቡ' : 'Please provide a description of at least 10 characters.');
+      return false;
+    }
+    if (!location.lat || !location.lng) {
+      setSubmitError(language === 'am' ? 'የካርታ ቦታ አልተገኘም' : 'Location coordinates are required.');
+      return false;
+    }
+    return true;
+  }
+
+  // ── Generate GPS Payload Metadata ─────────────────────────────────
+  function getGPSValidation() {
+    if (!location.lat || !location.lng) return { inAddis: false, score: 0 };
+    const check = validateGPS(location.lat, location.lng);
+    return {
+      inAddis: check.inAddisArea,
+      score: check.inAddisArea ? 100 : (check.inEthiopia ? 70 : 30)
+    };
+  }
+
   // ── Submit ────────────────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault();
-    setSubmitError('');
-
-    if (!description.trim()) return setSubmitError('Please describe the incident.');
-    if (!fireType) return setSubmitError('Please select the fire type.');
-    if (!location.lat || !location.lng) {
-      return setSubmitError('Location is required. Allow GPS or drag the pin on the map.');
-    }
-
-    const gpsCheck = validateGPS(location.lat, location.lng);
-    if (!gpsCheck.valid) {
-      return setSubmitError('The selected location appears to be outside Ethiopia. Please check the pin on the map.');
-    }
+    if (!validate()) return;
 
     setSubmitting(true);
+
+    const gpsValidation = getGPSValidation();
+    const reportPayload = {
+      description,
+      fire_type:      fireType,
+      lat:             location.lat,
+      lng:             location.lng,
+      address:         location.address || '',
+      gps_validated:   String(gpsValidation?.inAddis || false),
+      gps_score:       String(gpsValidation?.score || 50),
+      media_is_live:   String(mediaFiles.some(f => f.isLive)),
+    };
+
+    // ── If device is offline, save locally immediately ──────────────
+    if (!isOnline) {
+      try {
+        await saveOfflineReport(reportPayload, mediaFiles.map(f => f.file));
+        toast.success(language === 'am' ? 'ከመስመር ውጭ ነዎት። ሪፖርቱ ተቀምጧል' : 'You are offline. Report saved locally and will sync automatically when you reconnect.');
+        navigate('/dashboard');
+      } catch (err) {
+        toast.error('Failed to save report locally. Please try again.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // ── Online — attempt normal submission ───────────────────────────
     try {
       const formData = new FormData();
-      formData.append('description', description);
-      formData.append('fire_type', fireType);
-      formData.append('lat', location.lat);
-      formData.append('lng', location.lng);
-      formData.append('address', location.address);
-      formData.append('gps_validated', gpsCheck.inAddisArea ? 'true' : 'false');
-      formData.append('gps_score', String(gpsCheck.inAddisArea ? 100 : 50));
-      formData.append('media_is_live', String(isLiveCaptured));
-      
-      if (mediaFile) formData.append('media', mediaFile);
+      Object.entries(reportPayload).forEach(([key, value]) => formData.append(key, value));
+      mediaFiles.forEach(({ file }) => formData.append('media', file));
 
       await API.post('/incidents', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      // Show success toast notification and redirect with immediate timer
       toast.success('Fire report submitted successfully. Responders have been notified.');
-      setTimeout(() => navigate('/dashboard'), 1500);
+      setTimeout(() => navigate('/dashboard'), 1200);
+
     } catch (err) {
-      const errorMsg = err.response?.data?.message || 'Submission failed. Please try again.';
-      setSubmitError(errorMsg);
-      toast.error(errorMsg);
+      // ── Network failure even though navigator.onLine said online ──
+      const isNetworkError = !err.response;
+
+      if (isNetworkError) {
+        try {
+          await saveOfflineReport(reportPayload, mediaFiles.map(f => f.file));
+          toast.warning('Connection issue detected. Report saved locally and will sync automatically.');
+          navigate('/dashboard');
+        } catch (saveErr) {
+          toast.error('Failed to submit and could not save offline. Please try again.');
+        }
+      } else {
+        toast.error(err.response?.data?.message || 'Submission failed. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -199,6 +252,29 @@ export default function ReportForm() {
           <Link to="/dashboard" className="btn-secondary">{t.back}</Link>
         </div>
 
+        {!isOnline && (
+          <div style={{
+            padding:      '0.85rem 1.1rem',
+            background:   'rgba(230,60,47,0.08)',
+            border:       '1px solid rgba(230,60,47,0.2)',
+            borderRadius: 10,
+            marginBottom: '1.5rem',
+            display:      'flex',
+            alignItems:   'center',
+            gap:          '0.6rem',
+          }}>
+            <span style={{ fontSize: '1rem' }}>📡</span>
+            <div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f87c74' }}>
+                You're currently offline
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                Your report will be saved on this device and automatically submitted once you're back online.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="card">
           {submitError && (
             <div style={{ background: 'rgba(230,60,47,0.1)', border: '1px solid rgba(230,60,47,0.25)', borderRadius: 8, padding: '0.75rem 1rem', fontSize: '0.85rem', color: '#f87c74', marginBottom: '1.25rem' }}>
@@ -231,14 +307,24 @@ export default function ReportForm() {
               <label className="form-label">{t.description}</label>
               <textarea
                 className="form-textarea"
-                placeholder={t.descriptionPlaceholder}
+                placeholder={t.descriptionPlaceholder || 'Describe what you see — type of fire, size, people in danger…'}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 rows={4}
+                minLength={10}
               />
-              <span className="form-hint">
-                {description.length} {t.descriptionHint}
-              </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem' }}>
+                {description.length > 0 && description.length < 10 && (
+                  <span style={{ fontSize: '0.72rem', color: '#e63c2f' }}>
+                    Minimum 10 characters ({10 - description.length} more needed)
+                  </span>
+                )}
+                {description.length >= 10 && (
+                  <span style={{ fontSize: '0.72rem', color: '#22c55e' }}>✓ Good description</span>
+                )}
+                {description.length === 0 && <span />}
+                <span style={{ fontSize: '0.72rem', color: '#444' }}>{description.length} characters</span>
+              </div>
             </div>
 
             {/* ── Map ──────────────────────────────────────── */}
@@ -298,35 +384,93 @@ export default function ReportForm() {
 
             {/* ── Media Upload ──────────────────────────────── */}
             <div className="form-group">
-              <label className="form-label">{t.mediaLabel}</label>
-              {!mediaFile ? (
+              <label className="form-label">
+                {t.mediaLabel}
+                <span style={{ fontSize: '0.72rem', color: '#555', marginLeft: '0.5rem', fontWeight: 400 }}>
+                  (max {MAX_FILES} files, 10MB each)
+                </span>
+              </label>
+
+              {/* ── Thumbnails grid ──────────────────────────── */}
+              {mediaFiles.length > 0 && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                  gap: '0.5rem',
+                  marginBottom: '0.75rem',
+                }}>
+                  {mediaFiles.map((item, idx) => (
+                    <div key={idx} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2a2a', aspectRatio: '1' }}>
+                      <img
+                        src={item.previewUrl}
+                        alt={`capture ${idx + 1}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                      {item.isLive && (
+                        <div style={{
+                          position: 'absolute', top: 4, left: 4,
+                          background: 'rgba(34,197,94,0.92)', color: '#fff',
+                          padding: '0.15rem 0.45rem', borderRadius: 999,
+                          fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.03em',
+                        }}>
+                          ✓ {language === 'am' ? 'ቀጥታ' : 'Live'}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        style={{
+                          position: 'absolute', top: 4, right: 4,
+                          background: 'rgba(0,0,0,0.7)', color: '#fff',
+                          border: 'none', borderRadius: 4,
+                          padding: '0.2rem 0.45rem', cursor: 'pointer',
+                          fontSize: '0.65rem', lineHeight: 1,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── File count indicator ─────────────────────── */}
+              {mediaFiles.length > 0 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  marginBottom: '0.6rem', fontSize: '0.78rem',
+                  color: mediaFiles.length >= MAX_FILES ? '#e63c2f' : '#22c55e',
+                }}>
+                  <span>{mediaFiles.length}/{MAX_FILES} file{mediaFiles.length !== 1 ? 's' : ''} attached</span>
+                  {mediaFiles.length >= MAX_FILES && (
+                    <span style={{ color: '#f4820a' }}>— maximum reached</span>
+                  )}
+                </div>
+              )}
+
+              {/* ── Add photo button (hidden when limit reached) ─ */}
+              {mediaFiles.length < MAX_FILES && (
                 <div
-                  style={{ border: '2px dashed #2a2a2a', borderRadius: 10, padding: '2rem', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                  style={{
+                    border: '2px dashed #2a2a2a', borderRadius: 10,
+                    padding: mediaFiles.length > 0 ? '1.25rem' : '2rem',
+                    textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
+                  }}
                   onClick={() => setShowCamera(true)}
                   onMouseOver={e => e.currentTarget.style.borderColor = '#e63c2f'}
                   onMouseOut={e => e.currentTarget.style.borderColor = '#2a2a2a'}
                 >
-                  <div style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>📷</div>
+                  <div style={{ fontSize: mediaFiles.length > 0 ? '1.25rem' : '1.75rem', marginBottom: '0.35rem' }}>📷</div>
                   <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                    {language === 'am' ? 'ቀጥታ ፎቶ ለማንሳት ጠቅ ያድርጉ' : 'Tap to take a live photo'}
+                    {mediaFiles.length > 0
+                      ? (language === 'am' ? 'ሌላ ፎቶ ይጨምሩ' : 'Add another photo')
+                      : (language === 'am' ? 'ቀጥታ ፎቶ ለማንሳት ጠቅ ያድርጉ' : 'Tap to take a live photo')}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#444', marginTop: '0.25rem' }}>
-                    {language === 'am' ? 'ከቤተ-ስዕል ምስሎችን መጫን አይፈቀድም' : 'Gallery uploads are not allowed — camera only'}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ position: 'relative', border: '1px solid #2a2a2a', borderRadius: 10, overflow: 'hidden' }}>
-                  {mediaPreview && (
-                    <img src={mediaPreview} alt="preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
-                  )}
-                  {isLiveCaptured && (
-                    <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(34,197,94,0.92)', color: '#fff', padding: '0.25rem 0.65rem', borderRadius: 999, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.03em' }}>
-                      ✓ {language === 'am' ? 'ቀጥታ ተነስቷል' : 'Live Captured'}
+                  {mediaFiles.length === 0 && (
+                    <div style={{ fontSize: '0.75rem', color: '#444', marginTop: '0.25rem' }}>
+                      {language === 'am' ? 'ከቤተ-ስዕል ምስሎችን መጫን አይፈቀድም' : 'Gallery uploads are not allowed — camera only'}
                     </div>
                   )}
-                  <button type="button" onClick={removeFile} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: 6, padding: '0.3rem 0.65rem', cursor: 'pointer', fontSize: '0.75rem' }}>
-                    {t.removeFile}
-                  </button>
                 </div>
               )}
 
@@ -334,9 +478,7 @@ export default function ReportForm() {
                 <LiveCameraCapture
                   language={language}
                   onCapture={({ file, previewUrl }) => {
-                    setMediaFile(file);
-                    setMediaPreview(previewUrl);
-                    setIsLiveCaptured(true);
+                    setMediaFiles(prev => [...prev, { file, previewUrl, isLive: true }]);
                     setShowCamera(false);
                   }}
                   onCancel={() => setShowCamera(false)}
@@ -344,7 +486,7 @@ export default function ReportForm() {
               )}
             </div>
 
-            {/* ── Dynamic Action Button ─────────────────────── */}
+            {/* ── Submit Button ─────────────────────────────── */}
             {!user?.isRestricted && !user?.isBanned && (
               <button type="submit" className="btn-primary" disabled={submitting} style={{ width: '100%', padding: '0.9rem' }}>
                 {submitting ? t.submittingReport : `🚨 ${t.reportAFire}`}

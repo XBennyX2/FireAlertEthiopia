@@ -10,6 +10,10 @@ const {
   uploadProfilePhoto,
   removeProfilePhoto,
   deleteAccount,
+  getSessions,
+  revokeSession,
+  revokeOtherSessions,
+  exportUserData,
 } = require('../controllers/profileController');
 
 router.get('/',                    protect, getProfile);
@@ -20,5 +24,13 @@ router.put('/password',            protect, changePassword);
 router.post('/photo',              protect, uploadProfilePhoto);
 router.delete('/photo',            protect, removeProfilePhoto);
 router.delete('/',                 protect, deleteAccount);
+
+// Session routes
+router.get('/sessions',            protect, getSessions);
+router.delete('/sessions',         protect, revokeOtherSessions);
+router.delete('/sessions/:id',     protect, revokeSession);
+
+// GDPR Export route
+router.get('/export',              protect, exportUserData);
 
 module.exports = router;

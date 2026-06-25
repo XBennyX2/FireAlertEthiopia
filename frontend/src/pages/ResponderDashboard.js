@@ -8,6 +8,7 @@ import LiveTrackingMap from '../components/LiveTrackingMap';
 import API from '../api/axios';
 import { useToast } from '../context/ToastContext';
 import '../dashboard.css';
+import SkeletonCard from '../components/SkeletonCard';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -53,6 +54,7 @@ export default function ResponderDashboard() {
   const [actionLoading,     setActionLoading]     = useState('');
   const [showMap,           setShowMap]           = useState(true);
   const [trackingIncidentId, setTrackingIncidentId] = useState(null);
+  const [actionNotes,       setActionNotes]       = useState({});
 
   const ACTION_LABELS = {
     verify:   { label: t.verify,   style: 'btn-action'  },
@@ -75,15 +77,19 @@ export default function ResponderDashboard() {
     }
   }
 
-  async function takeAction(incidentId, action) {
+  async function takeAction(incidentId, action, extraBody = {}) {
     setActionLoading(incidentId + action);
     try {
-      await API.put(`/responder/incidents/${incidentId}/${action}`);
+      await API.put(`/responder/incidents/${incidentId}/${action}`, {
+        note: actionNotes[incidentId] || '',
+        ...extraBody,
+      });
+      setActionNotes(prev => { const n = {...prev}; delete n[incidentId]; return n; });
       if (action === 'resolve' || action === 'reject') {
         setTrackingIncidentId(null);
       }
       await loadIncidents();
-      
+
       const messages = {
         verify:   'Incident verified successfully.',
         dispatch: 'Units dispatched to incident location.',
@@ -164,6 +170,13 @@ export default function ResponderDashboard() {
       </nav>
 
       <div className="dash-content">
+        {loading && (
+  <>
+    <SkeletonCard lines={3} />
+    <SkeletonCard lines={3} />
+    <SkeletonCard lines={3} />
+  </>
+)}
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="dash-header">
@@ -350,24 +363,57 @@ export default function ResponderDashboard() {
                     <span>{fmtDate(incident.reportedAt)}</span>
                   </div>
 
-                  {/* ── Action Buttons ────────────────────────── */}
+                  {/* ── Notes textarea + Action Buttons ──────── */}
                   {actions.length > 0 && (
-                    <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
-                      {actions.map(action => {
-                        const cfg       = ACTION_LABELS[action];
-                        const isLoading = actionLoading === incident._id + action;
-                        return (
-                          <button
-                            key={action}
-                            className={cfg.style}
-                            onClick={() => takeAction(incident._id, action)}
-                            disabled={!!actionLoading}
-                          >
-                            {isLoading ? '…' : cfg.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <>
+                      <div style={{ marginTop:'0.75rem' }}>
+                        <textarea
+                          className="form-textarea"
+                          placeholder="Add a note (optional — shown in status timeline)…"
+                          value={actionNotes[incident._id] || ''}
+                          onChange={e => setActionNotes(prev => ({ ...prev, [incident._id]: e.target.value }))}
+                          rows={2}
+                          style={{ fontSize:'0.78rem', marginBottom:'0.5rem' }}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </div>
+
+                      <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
+                        {actions.map(action => {
+                          const cfg       = ACTION_LABELS[action];
+                          const isLoading = actionLoading === incident._id + action;
+
+                          if (action === 'reject') {
+                            return (
+                              <button
+                                key={action}
+                                className="btn-danger"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  takeAction(incident._id, 'reject', {
+                                    rejectionReason: actionNotes[incident._id] || ''
+                                  });
+                                }}
+                                disabled={!!actionLoading}
+                              >
+                                {isLoading ? '…' : '✕ Reject'}
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button
+                              key={action}
+                              className={cfg.style}
+                              onClick={() => takeAction(incident._id, action)}
+                              disabled={!!actionLoading}
+                            >
+                              {isLoading ? '…' : cfg.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
 
                   {/* ── Live Tracking — dispatched only ──────── */}

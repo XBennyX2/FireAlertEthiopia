@@ -447,3 +447,7 @@
 .dash-topbar {
   z-index: 50 !important;
 }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}

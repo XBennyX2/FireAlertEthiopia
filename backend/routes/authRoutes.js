@@ -18,6 +18,10 @@ router.post('/forgot-password',           forgotPassword);
 router.get('/reset-password/verify',      verifyResetToken);
 router.post('/reset-password',            resetPassword);
 
+const { verifyEmail, resendVerificationCode } = require('../controllers/authController');
+
+router.post('/verify-email',        verifyEmail);
+router.post('/resend-verification', resendVerificationCode);
 // ── Get current user (used by refreshUser in AuthContext) ─────────
 router.get('/me', protect, async (req, res) => {
   try {

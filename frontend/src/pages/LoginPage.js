@@ -49,43 +49,55 @@ export default function LoginPage() {
   }
 
   // ── Submit handler ────────────────────────────────────────────────
-async function handleSubmit(e) {
-  e.preventDefault();
-  setError('');
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
 
-  if (!validate()) return;
+    if (!validate()) return;
 
-  setLoading(true);
-  try {
-    const { data } = await API.post('/auth/login', { email, password });
-    login(data);
+    setLoading(true);
+    try {
+      const { data } = await API.post('/auth/login', { email, password });
+      login(data);
 
-    // Toast on successful login
-    toast.success('Welcome back!');
+      // Toast on successful login
+      toast.success('Welcome back!');
 
-    if (data.role === 'admin')          navigate('/admin');
-    else if (data.role === 'responder') navigate('/responder');
-    else                                navigate('/dashboard');
+      if (data.role === 'admin')          navigate('/admin');
+      else if (data.role === 'responder') navigate('/responder');
+      else                                navigate('/dashboard');
 
-  } catch (err) {
-    const status  = err.response?.status;
-    const message = err.response?.data?.message || 'Login failed. Please try again.';
+    } catch (err) {
+      const status  = err.response?.status;
+      const message = err.response?.data?.message || 'Login failed. Please try again.';
 
-    // Toast on error block
-    toast.error(message);
+      // Unverified account — send to verification page instead of showing error
+      if (err.response?.data?.requiresVerification) {
+        navigate('/verify-email', {
+          state: {
+            userId: err.response.data.userId,
+            email:  err.response.data.email,
+          },
+        });
+        return;
+      }
 
-    if (status === 423) {
-      // Account locked
-      setError(message);
-      setIsLocked(true);
-    } else {
-      setError(message);
-      setIsLocked(false);
+      // Toast on error block
+      toast.error(message);
+
+      if (status === 423) {
+        // Account locked
+        setError(message);
+        setIsLocked(true);
+      } else {
+        setError(message);
+        setIsLocked(false);
+      }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
   }
-}
+
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="auth-page">

@@ -42,17 +42,31 @@ const getIncidentQueue = async (req, res) => {
 // PUT /api/responder/incidents/:id/verify
 const verifyIncident = async (req, res) => {
   try {
-    const incident = await Incident.findById(req.params.id);
+    const incident = await Incident.findById(req.params.id).populate('reportedBy');
     if (!incident) return res.status(404).json({ message: 'Incident not found' });
-    if (incident.status !== 'pending') return res.status(400).json({ message: 'Only pending incidents can be verified' });
+    if (incident.status !== 'pending') return res.status(400).json({ message: 'Incident is not pending' });
 
-    incident.status            = 'verified';
-    incident.assignedResponder = req.user._id;
+    incident.status = 'verified';
+    incident.statusHistory = incident.statusHistory || [];
+    incident.statusHistory.push({
+      status:    'verified',
+      timestamp: new Date(),
+      note:      req.body.note || '',
+      updatedBy: req.user._id,
+    });
     await incident.save();
 
-    notifyReporter(req, incident, 'verified', 'Your fire report has been verified by a responder.');
-    res.json({ message: 'Incident verified', incident });
+    const io = req.app.get('io');
+    if (io && incident.reportedBy?._id) {
+      io.to(incident.reportedBy._id.toString()).emit('verified', {
+        message:    'Your incident report has been verified by a responder.',
+        incidentId: incident._id.toString(),
+      });
+    }
 
+    await updateReporterReputation(incident.reportedBy, 'verified');
+
+    res.json({ message: 'Incident verified', incident });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -61,16 +75,29 @@ const verifyIncident = async (req, res) => {
 // PUT /api/responder/incidents/:id/dispatch
 const dispatchIncident = async (req, res) => {
   try {
-    const incident = await Incident.findById(req.params.id);
+    const incident = await Incident.findById(req.params.id).populate('reportedBy');
     if (!incident) return res.status(404).json({ message: 'Incident not found' });
     if (incident.status !== 'verified') return res.status(400).json({ message: 'Only verified incidents can be dispatched' });
 
     incident.status = 'dispatched';
+    incident.statusHistory = incident.statusHistory || [];
+    incident.statusHistory.push({
+      status:    'dispatched',
+      timestamp: new Date(),
+      note:      req.body.note || '',
+      updatedBy: req.user._id,
+    });
     await incident.save();
 
-    notifyReporter(req, incident, 'dispatched', 'Fire units have been dispatched to your reported location.');
-    res.json({ message: 'Incident dispatched', incident });
+    const io = req.app.get('io');
+    if (io && incident.reportedBy?._id) {
+      io.to(incident.reportedBy._id.toString()).emit('dispatched', {
+        message:    'A fire responder has been dispatched to your reported incident.',
+        incidentId: incident._id.toString(),
+      });
+    }
 
+    res.json({ message: 'Responders dispatched', incident });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -79,25 +106,36 @@ const dispatchIncident = async (req, res) => {
 // PUT /api/responder/incidents/:id/resolve
 const resolveIncident = async (req, res) => {
   try {
-    const incident = await Incident.findById(req.params.id);
+    const incident = await Incident.findById(req.params.id).populate('reportedBy');
     if (!incident) return res.status(404).json({ message: 'Incident not found' });
     if (incident.status !== 'dispatched') return res.status(400).json({ message: 'Only dispatched incidents can be resolved' });
 
     incident.status     = 'resolved';
     incident.resolvedAt = new Date();
+    incident.statusHistory = incident.statusHistory || [];
+    incident.statusHistory.push({
+      status:    'resolved',
+      timestamp: new Date(),
+      note:      req.body.note || '',
+      updatedBy: req.user._id,
+    });
     await incident.save();
 
-    // Use the reputation manager — applies consequences automatically
-    const result = await updateReputationScore(incident.reportedBy, 'verified');
+    const io = req.app.get('io');
+    if (io && incident.reportedBy?._id) {
+      io.to(incident.reportedBy._id.toString()).emit('resolved', {
+        message:    'Your reported incident has been resolved.',
+        incidentId: incident._id.toString(),
+      });
+    }
 
-    notifyReporter(req, incident, 'resolved', 'The fire incident you reported has been fully resolved. Thank you.');
+    const result = await updateReputationScore(incident.reportedBy, 'verified');
 
     res.json({
       message:          'Incident resolved',
       incident,
       reporterNewScore: result?.score,
     });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -106,22 +144,34 @@ const resolveIncident = async (req, res) => {
 // PUT /api/responder/incidents/:id/reject
 const rejectIncident = async (req, res) => {
   try {
-    const incident = await Incident.findById(req.params.id);
+    const incident = await Incident.findById(req.params.id).populate('reportedBy');
     if (!incident) return res.status(404).json({ message: 'Incident not found' });
     if (incident.status !== 'pending') return res.status(400).json({ message: 'Only pending incidents can be rejected' });
 
-    incident.status = 'rejected';
+    incident.status          = 'rejected';
+    incident.rejectionReason = req.body.rejectionReason || req.body.note || '';
+    incident.statusHistory   = incident.statusHistory || [];
+    incident.statusHistory.push({
+      status:    'rejected',
+      timestamp: new Date(),
+      note:      req.body.rejectionReason || req.body.note || '',
+      updatedBy: req.user._id,
+    });
     await incident.save();
 
-    // Use the reputation manager — applies ban/restrict automatically
+    const io = req.app.get('io');
+    if (io && incident.reportedBy?._id) {
+      io.to(incident.reportedBy._id.toString()).emit('rejected', {
+        message:    'Your incident report was reviewed and could not be verified.',
+        incidentId: incident._id.toString(),
+      });
+    }
+
     const result = await updateReputationScore(incident.reportedBy, 'false_report');
 
-    // Increment false report count
     await User.findByIdAndUpdate(incident.reportedBy, {
       $inc: { falseReportCount: 1 }
     });
-
-    notifyReporter(req, incident, 'rejected', 'Your fire report was reviewed and could not be verified.');
 
     res.json({
       message:          'Incident rejected',
@@ -132,7 +182,6 @@ const rejectIncident = async (req, res) => {
         isRestricted: result?.isRestricted,
       },
     });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

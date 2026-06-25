@@ -27,6 +27,7 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({
     name: '', email: '', password: '', confirmPassword: ''
   });
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // ── Validation ────────────────────────────────────────────────────
   function validate() {
@@ -61,6 +62,10 @@ export default function RegisterPage() {
       newErrors.confirmPassword = t.errorPasswordsMismatch || 'Passwords do not match.';
       valid = false;
     }
+    if (!agreedToTerms) {
+  newErrors.terms = 'You must accept the terms to create an account.';
+  valid = false;
+}
 
     setErrors(newErrors);
     return valid;
@@ -77,14 +82,11 @@ export default function RegisterPage() {
     try {
       const { data } = await API.post('/auth/register', { name, email, password });
 
-      // Auto login after successful registration
-      login(data);
-
       // Toast on successful registration
-      toast.success('Account created successfully. Welcome to FireAlert!');
+      toast.success('Account created! Please check your email to verify your address.');
 
-      // Registered users always go to /dashboard
-      navigate('/dashboard');
+      // Redirect to email verification — no token yet
+      navigate('/verify-email', { state: { userId: data.userId, email: data.email } });
 
     } catch (err) {
       const msg = err.response?.data?.message || t.errorRegisterFailed || 'Registration failed. Please try again.';
@@ -166,6 +168,23 @@ export default function RegisterPage() {
               autoComplete="new-password"
             />
             {errors.password && <span className="form-error">{errors.password}</span>}
+            {/* Password strength indicator */}
+{password && (
+  <div style={{ marginTop:'0.4rem' }}>
+    <div style={{ height:3, background:'#1e1e1e', borderRadius:99, overflow:'hidden' }}>
+      <div style={{
+        height:     '100%',
+        width:      password.length >= 12 ? '100%' : password.length >= 8 ? '66%' : '33%',
+        background: password.length >= 12 ? '#22c55e' : password.length >= 8 ? '#f4820a' : '#e63c2f',
+        borderRadius: 99,
+        transition: 'width 0.3s',
+      }} />
+    </div>
+    <div style={{ fontSize:'0.68rem', color:'#555', marginTop:'0.15rem' }}>
+      {password.length >= 12 ? 'Strong password' : password.length >= 8 ? 'Moderate — try adding more characters' : 'Weak — use at least 8 characters'}
+    </div>
+  </div>
+)}
           </div>
 
           {/* Confirm Password */}
@@ -184,6 +203,27 @@ export default function RegisterPage() {
               <span className="form-error">{errors.confirmPassword}</span>
             )}
           </div>
+
+          {/* Terms acceptance */}
+<div style={{ marginBottom:'1rem' }}>
+  <label style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem', cursor:'pointer' }}>
+    <input
+      type="checkbox"
+      checked={agreedToTerms}
+      onChange={e => setAgreedToTerms(e.target.checked)}
+      style={{ marginTop:'0.15rem', accentColor:'#f4820a', flexShrink:0 }}
+    />
+    <span style={{ fontSize:'0.8rem', color:'#666', lineHeight:1.5 }}>
+      I agree to the{' '}
+      <Link to="/safety" style={{ color:'#f4820a', textDecoration:'none' }}>
+        Terms of Service
+      </Link>
+      {' '}and confirm that I will only submit genuine fire reports.
+    </span>
+  </label>
+  {errors.terms && <div className="form-error" style={{ marginTop:'0.3rem' }}>{errors.terms}</div>}
+</div>
+          
 
           {/* Submit */}
           <button type="submit" className="auth-btn" disabled={loading}>

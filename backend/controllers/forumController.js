@@ -161,22 +161,36 @@ const deletePost = async (req, res) => {
 };
 
 // ── POST /api/forum/:id/like — toggle like on post ───────────────
+// ── POST /api/forum/:id/like — toggle like on post ───────────────
 const likePost = async (req, res) => {
   try {
-    const post    = await ForumPost.findById(req.params.id);
+    const post = await ForumPost.findById(req.params.id).populate('author', '_id name');
     if (!post || post.isRemoved) return res.status(404).json({ message: 'Post not found' });
 
-    const userId  = req.user._id.toString();
-    const hasLiked = post.likes.map(l => l.toString()).includes(userId);
+    const userId      = req.user._id.toString();
+    const alreadyLiked = post.likes.map(l => l.toString()).includes(userId);
 
-    if (hasLiked) {
+    if (alreadyLiked) {
       post.likes = post.likes.filter(l => l.toString() !== userId);
     } else {
       post.likes.push(req.user._id);
+
+      // Notify post owner on new like (not if they liked their own post)
+      const isOwnPost = post.author._id.toString() === userId;
+      if (!isOwnPost) {
+        const io = req.app.get('io');
+        if (io) {
+          io.to(post.author._id.toString()).emit('forumReply', {
+            message:    `${req.user.name} liked your post: "${post.title}"`,
+            postId:     post._id.toString(),
+            incidentId: null,
+          });
+        }
+      }
     }
 
     await post.save();
-    res.json({ liked: !hasLiked, likeCount: post.likes.length });
+    res.json({ likes: post.likes.length, liked: !alreadyLiked });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -184,36 +198,34 @@ const likePost = async (req, res) => {
 
 // ── POST /api/forum/:id/replies — add reply ──────────────────────
 const addReply = async (req, res) => {
-  const { content } = req.body;
-  if (!content?.trim()) {
-    return res.status(400).json({ message: 'Reply content is required' });
-  }
-
   try {
-    const post = await ForumPost.findById(req.params.id);
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ message: 'Reply cannot be empty' });
+
+    const post = await ForumPost.findById(req.params.id).populate('author', '_id name');
     if (!post || post.isRemoved) return res.status(404).json({ message: 'Post not found' });
 
-    post.replies.push({ author: req.user._id, content: content.trim() });
+    post.replies.push({ author: req.user._id, content: content.trim(), createdAt: new Date() });
     await post.save();
 
-    // Notify the post author if someone else replied
-    if (post.author.toString() !== req.user._id.toString()) {
+    // Notify post owner if someone else replied
+    const isOwnPost = post.author._id.toString() === req.user._id.toString();
+    if (!isOwnPost) {
       const io = req.app.get('io');
       if (io) {
-        io.to(post.author.toString()).emit('forumReply', {
-          postId:     post._id,
-          postTitle:  post.title,
-          repliedBy:  req.user.name,
+        io.to(post.author._id.toString()).emit('forumReply', {
           message:    `${req.user.name} replied to your post: "${post.title}"`,
-          timestamp:  new Date().toISOString(),
+          postId:     post._id.toString(),
+          incidentId: null,
         });
       }
     }
 
-    const updated = await ForumPost.findById(post._id)
-      .populate('replies.author', 'name profilePhoto role');
+    const populated = await ForumPost.findById(post._id)
+      .populate('author', 'name role profilePhoto')
+      .populate('replies.author', 'name role profilePhoto');
 
-    res.status(201).json(updated.replies[updated.replies.length - 1]);
+    res.status(201).json(populated.replies[populated.replies.length - 1]);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -153,8 +153,8 @@ function fmtTime(iso) {
 export default function NotificationBell() {
   const { user, refreshUser } = useAuth();
   const navigate    = useNavigate();
-  const [open, setOpen]              = useState(false);
-  const [notifications, setNotifs]   = useState([]);
+  const [open, setOpen]            = useState(false);
+  const [notifications, setNotifs] = useState([]);
   const wrapRef     = useRef(null);
 
   // ── Socket connection ───────────────────────────────────────────
@@ -167,26 +167,36 @@ export default function NotificationBell() {
       if (user._id) socket.emit('join', user._id);
     });
 
+    // ── addNotif: stores type, message, incidentId, postId ───────
     const addNotif = (type, data) => {
-  setNotifs(prev => [{
-    id:        Date.now(),
-    type,
-    message:   data.message || 'Incident updated.',
-    timestamp: new Date().toISOString(),
-    read:      false,
-  }, ...prev.slice(0, 19)]);
+      setNotifs(prev => [{
+        id:         Date.now(),
+        type,
+        message:    data.message || 'New notification.',
+        timestamp:  new Date().toISOString(),
+        read:       false,
+        incidentId: data.incidentId || null,
+        postId:     data.postId     || null,
+      }, ...prev.slice(0, 19)]);
 
-  // Refresh user data when status changes affect reputation
-  if (['verified', 'resolved', 'rejected'].includes(type)) {
-    refreshUser();
-  }
-};
+      if (['verified', 'resolved', 'rejected'].includes(type)) {
+        refreshUser();
+      }
+    };
 
     socket.on('incidentUpdate', d => addNotif('incidentUpdate', d));
-    ['verified','dispatched','resolved','rejected'].forEach(ev => {
+    ['verified', 'dispatched', 'resolved', 'rejected'].forEach(ev => {
       socket.on(ev, d => addNotif(ev, d));
     });
-    socket.on('forumReply', d => addNotif('forumReply', d));
+
+    // ── forumReply: replies and likes on forum posts ──────────────
+    socket.on('forumReply', (data) => {
+      addNotif('forumReply', {
+        message:    data.message,
+        incidentId: null,
+        postId:     data.postId,
+      });
+    });
 
     return () => socket.disconnect();
   }, [user]);
@@ -208,14 +218,14 @@ export default function NotificationBell() {
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
   }
 
+  function markRead(id) {
+    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }
+
   function handleViewAll() {
     setOpen(false);
     markAllRead();
     navigate('/notifications');
-  }
-
-  function handleItemClick(id) {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   }
 
   return (
@@ -257,9 +267,18 @@ export default function NotificationBell() {
                   ...S.item,
                   background: n.read ? 'transparent' : 'rgba(244,130,10,0.04)',
                 }}
-                onClick={() => handleItemClick(n.id)}
-                onMouseOver={e  => e.currentTarget.style.background = '#161616'}
-                onMouseOut={e   => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(244,130,10,0.04)'}
+                onClick={() => {
+                  markRead(n.id);
+                  if (n.incidentId) {
+                    setOpen(false);
+                    navigate(`/incidents/${n.incidentId}`);
+                  } else if (n.postId) {
+                    setOpen(false);
+                    navigate(`/forum/${n.postId}`);
+                  }
+                }}
+                onMouseOver={e => e.currentTarget.style.background = '#161616'}
+                onMouseOut={e  => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(244,130,10,0.04)'}
               >
                 <div style={S.dot(n.read)} />
                 <div>

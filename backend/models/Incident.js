@@ -7,15 +7,14 @@ const incidentSchema = new mongoose.Schema({
     required: true
   },
   
-  statusHistory: [
-  {
-    status:    { type: String },
-    timestamp: { type: Date, default: Date.now },
-    note:      { type: String, default: '' },
-    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  }
-],
+  statusHistory: [{
+  status:    { type: String },
+  timestamp: { type: Date, default: Date.now },
+  note:      { type: String, default: '' },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+}],
 rejectionReason: { type: String, default: '' },
+resolvedAt:      { type: Date },
 
   description: {
     type: String,

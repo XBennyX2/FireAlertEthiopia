@@ -9,6 +9,8 @@ import LiveTrackingMap from '../components/LiveTrackingMap';
 import API from '../api/axios';
 import '../dashboard.css';
 import SearchFilterBar from '../components/SearchFilterBar';
+import OfflineSyncBar from '../components/OfflineSyncBar';
+import SkeletonCard from '../components/SkeletonCard';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -59,6 +61,7 @@ export default function UserDashboard() {
     }
     load();
   }, []);
+  
 
   const counts = {
     total:    incidents.length,
@@ -101,10 +104,12 @@ export default function UserDashboard() {
           <div className="dash-topbar-logo-icon">🔥</div>
           <span className="dash-topbar-logo-text">{t.appName}</span>
         </Link>
-        <Link to="/forum" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>
+        
+     
+        <div className="dash-topbar-right">
+          <Link to="/forum" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>
           💬 Forum
         </Link>
-        <div className="dash-topbar-right">
           <LanguageSwitcher />
           <span className="dash-role-badge">{t.citizen}</span>
           <span className="dash-user-name">{user?.name}</span>
@@ -151,8 +156,15 @@ export default function UserDashboard() {
             <h1 className="dash-title">{t.hello}, {user?.name?.split(' ')[0]} 👋</h1>
             <p className="dash-subtitle">{t.activitySummary}</p>
           </div>
+           <Link to="/apply-responder" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>
+  🚒 Become a Responder
+</Link>
+<Link to="/safety" className="btn-secondary" style={{ fontSize:'0.78rem' }}>
+  🛡️ Safety Center
+</Link>
           <Link to="/report" className="btn-primary">🚨 {t.reportAFire}</Link>
         </div>
+        <OfflineSyncBar />
 
         {/* ── Search and Filter Controls ───────────────────────── */}
         <SearchFilterBar
@@ -264,6 +276,14 @@ export default function UserDashboard() {
             )}
           </div>
         )}
+        {loading && (
+  <>
+    <SkeletonCard lines={3} />
+    <SkeletonCard lines={3} />
+    <SkeletonCard lines={3} />
+  </>
+)}
+        
 
         {/* ── Incident Render Cards ───────────────────────────── */}
         {!loading && filteredIncidents.length > 0 && (

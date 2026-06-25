@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const helmet     = require('helmet');
 const hpp        = require('hpp');
 const connectDB  = require('./config/db');
+const { recordError, recordRequest } = require('./controllers/healthController');
 const {
   apiLimiter,
   authLimiter,
@@ -55,6 +56,12 @@ app.use(cors(corsOptions));
 // ── Body parsing ──────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/api/safety', require('./routes/safetyRoutes'));
+
+app.use((req, res, next) => {
+  recordRequest();
+  next();
+});
 
 // ── NoSQL injection prevention ────────────────────────────────────
 // Custom sanitizer that doesn't break on read-only req.query in newer Express
@@ -79,6 +86,8 @@ app.use((req, res, next) => {
   next();
 });
 
+const { getSystemHealth } = require('./controllers/healthController');
+app.use('/api/admin/health', require('./middleware/authMiddleware').protect, require('./middleware/roleMiddleware').authorize('admin'), getSystemHealth);
 // ── HTTP parameter pollution prevention ──────────────────────────
 app.use(hpp());
 app.use('/api/forum', require('./routes/forumRoutes'));
@@ -104,6 +113,7 @@ app.use('/api/profile',   require('./routes/profileRoutes'));
 
 // ── Global error handler ──────────────────────────────────────────
 app.use((err, req, res, next) => {
+  recordError();
   console.error('Unhandled error:', err.message);
   res.status(err.status || 500).json({
     message: err.message || 'Internal server error',

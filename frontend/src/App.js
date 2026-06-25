@@ -19,6 +19,10 @@ import { ToastProvider } from './context/ToastContext';
 import IncidentDetailPage from './pages/IncidentDetailPage';
 import ForumPage     from './pages/ForumPage';
 import ForumPostPage from './pages/ForumPostPage';
+import ApplyResponderPage from './pages/ApplyResponderPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import SafetyPage from './pages/SafetyPage';
+
 
 function App() {
   return (
@@ -49,6 +53,17 @@ function App() {
     <ForumPostPage />
   </ProtectedRoute>
 } />
+<Route
+  path="/apply-responder"
+  element={
+    <ProtectedRoute allowedRoles={['user']}>
+      <ApplyResponderPage />
+    </ProtectedRoute>
+  }
+/>
+<Route path="/verify-email" element={<VerifyEmailPage />} />
+
+<Route path="/safety" element={<SafetyPage />} />
 
           {/* User-only routes */}
           <Route path="/dashboard" element={

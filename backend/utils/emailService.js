@@ -15,9 +15,10 @@ function generateVerificationCode() {
 
 // ── Send email verification code ─────────────────────────────────
 async function sendVerificationCode(toEmail, code, purpose = 'email change') {
-  const subject = purpose === 'password_reset'
-    ? 'FireAlert — Password Reset Code'
-    : 'FireAlert — Email Verification Code';
+  const subject =
+    purpose === 'password_reset' ? 'FireAlert — Password Reset Code' :
+    purpose === 'registration'   ? 'FireAlert — Verify Your Account' :
+    'FireAlert — Email Verification Code';
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0e0e0e; color: #f0ede8; padding: 2rem; border-radius: 12px;">
@@ -31,13 +32,15 @@ async function sendVerificationCode(toEmail, code, purpose = 'email change') {
       </div>
 
       <h2 style="font-size: 1rem; font-weight: 600; color: #f0ede8; margin: 0 0 0.5rem;">
-        ${purpose === 'password_reset' ? 'Reset Your Password' : 'Verify Your New Email'}
+        ${purpose === 'password_reset' ? 'Reset Your Password' :
+          purpose === 'registration'   ? 'Welcome to FireAlert' :
+          'Verify Your New Email'}
       </h2>
 
       <p style="font-size: 0.875rem; color: #888; line-height: 1.6; margin: 0 0 1.5rem;">
-        ${purpose === 'password_reset'
-          ? 'You requested a password reset. Use the code below to continue.'
-          : 'You requested an email address change. Enter this code to confirm your new email.'}
+        ${purpose === 'password_reset' ? 'You requested a password reset. Use the code below to continue.' :
+          purpose === 'registration'   ? 'Thanks for signing up. Enter this code to verify your email and activate your account.' :
+          'You requested an email address change. Enter this code to confirm your new email.'}
       </p>
 
       <div style="background: #161616; border: 1px solid #2a2a2a; border-radius: 10px; padding: 1.5rem; text-align: center; margin-bottom: 1.5rem;">

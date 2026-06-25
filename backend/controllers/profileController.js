@@ -223,6 +223,88 @@ const deleteAccount = async (req, res) => {
   }
 };
 
+// ── GET /api/profile/sessions ─────────────────────────────────────
+const getSessions = async (req, res) => {
+  try {
+    const Session = require('../models/Session');
+    const sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
+    
+    const sessionsWithCurrent = sessions.map(s => {
+      const isCurrent = s.token === req.token;
+      return {
+        _id: s._id,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent,
+        createdAt: s.createdAt,
+        lastActive: s.lastActive,
+        isCurrent
+      };
+    });
+
+    res.json(sessionsWithCurrent);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── DELETE /api/profile/sessions/:id ──────────────────────────────
+const revokeSession = async (req, res) => {
+  try {
+    const Session = require('../models/Session');
+    const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+    await Session.deleteOne({ _id: req.params.id });
+    res.json({ message: 'Session revoked successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── DELETE /api/profile/sessions ──────────────────────────────────
+const revokeOtherSessions = async (req, res) => {
+  try {
+    const Session = require('../models/Session');
+    await Session.deleteMany({
+      userId: req.user._id,
+      token: { $ne: req.token }
+    });
+    res.json({ message: 'All other sessions revoked successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── GET /api/profile/export ───────────────────────────────────────
+const exportUserData = async (req, res) => {
+  try {
+    const Incident = require('../models/Incident');
+    const ForumPost = require('../models/ForumPost');
+    const Application = require('../models/Application');
+
+    const user = await User.findById(req.user._id).select('-password');
+    const reports = await Incident.find({ reportedBy: req.user._id });
+    const forumPosts = await ForumPost.find({ author: req.user._id });
+    const applications = await Application.find({ applicant: req.user._id });
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      userProfile: user,
+      reportedIncidents: reports,
+      forumPosts: forumPosts,
+      responderApplications: applications
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=user-data-${req.user._id}.json`);
+    res.send(JSON.stringify(exportData, null, 2));
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getProfile,
   updateProfile,
@@ -232,4 +314,8 @@ module.exports = {
   uploadProfilePhoto,
   removeProfilePhoto,
   deleteAccount,
+  getSessions,
+  revokeSession,
+  revokeOtherSessions,
+  exportUserData,
 };
