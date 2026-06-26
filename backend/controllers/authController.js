@@ -48,7 +48,7 @@ async function issueVerificationCode(user) {
 
 // ── Register ──────────────────────────────────────────────────────
 const register = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, phone } = req.body; // ← add phone
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Please provide name, email and password' });
@@ -71,6 +71,7 @@ const register = async (req, res) => {
       name:       name.trim(),
       email:      email.toLowerCase().trim(),
       password:   hashedPassword,
+      phone:      phone?.trim() || '',   // ← save phone
       isVerified: false,
     });
 
@@ -78,7 +79,6 @@ const register = async (req, res) => {
       await issueVerificationCode(user);
     } catch (emailErr) {
       console.error('Failed to send verification email:', emailErr.message);
-      // Registration still succeeds — they can use "resend" on the verify screen
     }
 
     res.status(201).json({

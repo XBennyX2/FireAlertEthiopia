@@ -277,12 +277,12 @@ export default function UserDashboard() {
           </div>
         )}
         {loading && (
-  <>
-    <SkeletonCard lines={3} />
-    <SkeletonCard lines={3} />
-    <SkeletonCard lines={3} />
-  </>
-)}
+          <>
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+          </>
+        )}
         
 
         {/* ── Incident Render Cards ───────────────────────────── */}
@@ -309,9 +309,20 @@ export default function UserDashboard() {
 
                   {/* ── Card top row ──────────────────────────── */}
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem' }}>
-                    <span style={{ fontSize:'0.7rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', color:'#444' }}>
-                      {translatedType}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize:'0.7rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', color:'#444' }}>
+                        {translatedType}
+                      </span>
+                      {incident.isAnonymous && (
+                        <span style={{
+                          fontSize:'0.65rem', padding:'0.1rem 0.5rem', borderRadius:999,
+                          background:'rgba(244,130,10,0.1)', color:'#f4820a',
+                          fontWeight:700, marginLeft:'0.4rem',
+                        }}>
+                          Anonymous
+                        </span>
+                      )}
+                    </div>
                     <StatusBadge status={incident.status} t={t} />
                   </div>
 

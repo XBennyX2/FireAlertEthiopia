@@ -51,7 +51,8 @@ resolvedAt:      { type: Date },
     ref: 'User'
   },
   reportedAt:  { type: Date, default: Date.now },
-  resolvedAt:  { type: Date }
+  resolvedAt:  { type: Date },
+  isAnonymous: { type: Boolean, default: false },
 });
 
 module.exports = mongoose.model('Incident', incidentSchema);

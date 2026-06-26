@@ -42,6 +42,11 @@ export default function ProfilePage() {
   const [newPassword,     setNewPassword]     = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // ── Session management ────────────────────────────────────────────
+  const [sessions,        setSessions]        = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingId,      setRevokingId]      = useState('');
+
   // ── UI state ──────────────────────────────────────────────────────
   const [activeTab,      setActiveTab]      = useState('profile');
   const [saving,         setSaving]         = useState(false);
@@ -195,6 +200,19 @@ export default function ProfilePage() {
       toast.error(err.response?.data?.message || 'Failed to change password.');
     } finally {
       setSavingPass(false);
+    }
+  }
+
+  // ── Load sessions ──────────────────────────────────────────────────
+  async function loadSessions() {
+    setSessionsLoading(true);
+    try {
+      const { data } = await API.get('/auth/sessions');
+      setSessions(data);
+    } catch {
+      toast.error('Failed to load sessions.');
+    } finally {
+      setSessionsLoading(false);
     }
   }
 
@@ -366,6 +384,7 @@ export default function ProfilePage() {
           {user?.role === 'responder' && (
             <button style={TAB('performance')} onClick={() => setActiveTab('performance')}>Performance</button>
           )}
+          <button style={TAB('security')} onClick={() => { setActiveTab('security'); loadSessions(); }}>🔐 Security</button>
           <button style={TAB('danger')} onClick={() => setActiveTab('danger')}>Account</button>
         </div>
 
@@ -640,6 +659,102 @@ export default function ProfilePage() {
                   <span style={{ fontSize:'0.8rem', color:'var(--text-muted)', lineHeight:1.6 }}>{tip}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: Security ─────────────────────────────────────── */}
+        {activeTab === 'security' && (
+          <div>
+            <div className="card" style={{ marginBottom:'1.25rem' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
+                <div className="section-label">Active Sessions</div>
+                <div style={{ display:'flex', gap:'0.5rem' }}>
+                  <button className="btn-secondary" style={{ fontSize:'0.75rem' }} onClick={loadSessions}>
+                    ↻ Refresh
+                  </button>
+                  <button
+                    className="btn-danger"
+                    style={{ fontSize:'0.75rem' }}
+                    onClick={async () => {
+                      if (!window.confirm('Revoke all other sessions? You will stay logged in here.')) return;
+                      try {
+                        await API.delete('/auth/sessions');
+                        toast.success('All other sessions revoked.');
+                        loadSessions();
+                      } catch {
+                        toast.error('Failed to revoke sessions.');
+                      }
+                    }}
+                  >
+                    Revoke All Others
+                  </button>
+                </div>
+              </div>
+
+              {sessionsLoading && <div className="loading-state">Loading sessions…</div>}
+
+              {!sessionsLoading && sessions.length === 0 && (
+                <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>No active sessions found.</div>
+              )}
+
+              {sessions.map(s => (
+                <div key={s._id} style={{
+                  display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+                  padding:'0.75rem 0', borderBottom:'1px solid #111', gap:'0.75rem', flexWrap:'wrap',
+                }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.2rem' }}>
+                      <span style={{ fontSize:'0.82rem', fontWeight:600, color:'var(--text-primary)' }}>
+                        {s.userAgent?.split(')')[0]?.replace('Mozilla/5.0 (', '') || 'Unknown device'}
+                      </span>
+                      {s.isCurrent && (
+                        <span style={{
+                          fontSize:'0.65rem', padding:'0.1rem 0.5rem', borderRadius:999,
+                          background:'rgba(34,197,94,0.12)', color:'#22c55e', fontWeight:700,
+                        }}>
+                          Current
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize:'0.72rem', color:'#555' }}>
+                      IP: {s.ipAddress} · Last active: {new Date(s.lastActive).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                    </div>
+                    <div style={{ fontSize:'0.68rem', color:'#444', marginTop:'0.1rem' }}>
+                      Signed in: {new Date(s.createdAt).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+                    </div>
+                  </div>
+                  {!s.isCurrent && (
+                    <button
+                      className="btn-danger"
+                      style={{ fontSize:'0.72rem', padding:'0.3rem 0.75rem', flexShrink:0 }}
+                      disabled={revokingId === s._id}
+                      onClick={async () => {
+                        setRevokingId(s._id);
+                        try {
+                          await API.delete(`/auth/sessions/${s._id}`);
+                          toast.success('Session revoked.');
+                          setSessions(prev => prev.filter(x => x._id !== s._id));
+                        } catch {
+                          toast.error('Failed to revoke session.');
+                        } finally {
+                          setRevokingId('');
+                        }
+                      }}
+                    >
+                      {revokingId === s._id ? 'Revoking…' : 'Revoke'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 2FA placeholder — coming after core features */}
+            <div className="card" style={{ opacity:0.5 }}>
+              <div className="section-label" style={{ marginBottom:'0.4rem' }}>Two-Factor Authentication</div>
+              <div style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>
+                2FA via authenticator app — coming soon.
+              </div>
             </div>
           </div>
         )}

@@ -16,6 +16,7 @@ export default function RegisterPage() {
   // ── Form state ────────────────────────────────────────────────────
   const [name,            setName]            = useState('');
   const [email,           setEmail]           = useState('');
+  const [phone,           setPhone]           = useState('');
   const [password,        setPassword]        = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -25,13 +26,13 @@ export default function RegisterPage() {
 
   // ── Field-level errors ────────────────────────────────────────────
   const [errors, setErrors] = useState({
-    name: '', email: '', password: '', confirmPassword: ''
+    name: '', email: '', password: '', confirmPassword: '', phone: '', terms: ''
   });
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // ── Validation ────────────────────────────────────────────────────
   function validate() {
-    const newErrors = { name: '', email: '', password: '', confirmPassword: '' };
+    const newErrors = { name: '', email: '', password: '', confirmPassword: '', phone: '', terms: '' };
     let valid = true;
 
     if (!name.trim()) {
@@ -44,6 +45,11 @@ export default function RegisterPage() {
       valid = false;
     } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = t.errorEmailInvalid || 'Enter a valid email address.';
+      valid = false;
+    }
+
+    if (phone && !/^[\d\s\+\-\(\)]{7,15}$/.test(phone)) {
+      newErrors.phone = 'Enter a valid phone number.';
       valid = false;
     }
 
@@ -62,10 +68,11 @@ export default function RegisterPage() {
       newErrors.confirmPassword = t.errorPasswordsMismatch || 'Passwords do not match.';
       valid = false;
     }
+
     if (!agreedToTerms) {
-  newErrors.terms = 'You must accept the terms to create an account.';
-  valid = false;
-}
+      newErrors.terms = 'You must accept the terms to create an account.';
+      valid = false;
+    }
 
     setErrors(newErrors);
     return valid;
@@ -80,7 +87,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const { data } = await API.post('/auth/register', { name, email, password });
+      const { data } = await API.post('/auth/register', { name, email, password, phone });
 
       // Toast on successful registration
       toast.success('Account created! Please check your email to verify your address.');
@@ -155,6 +162,26 @@ export default function RegisterPage() {
             {errors.email && <span className="form-error">{errors.email}</span>}
           </div>
 
+          {/* Phone number (optional) */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="phone">
+              Phone Number
+              <span style={{ fontSize:'0.72rem', color:'#555', marginLeft:'0.4rem', fontWeight:400 }}>
+                (optional)
+              </span>
+            </label>
+            <input
+              id="phone"
+              type="tel"
+              className={`form-input ${errors.phone ? 'error' : ''}`}
+              placeholder="09xx xxx xxx"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              autoComplete="tel"
+            />
+            {errors.phone && <span className="form-error">{errors.phone}</span>}
+          </div>
+
           {/* Password */}
           <div className="form-group">
             <label className="form-label" htmlFor="password">{t.passwordLabel}</label>
@@ -169,22 +196,22 @@ export default function RegisterPage() {
             />
             {errors.password && <span className="form-error">{errors.password}</span>}
             {/* Password strength indicator */}
-{password && (
-  <div style={{ marginTop:'0.4rem' }}>
-    <div style={{ height:3, background:'#1e1e1e', borderRadius:99, overflow:'hidden' }}>
-      <div style={{
-        height:     '100%',
-        width:      password.length >= 12 ? '100%' : password.length >= 8 ? '66%' : '33%',
-        background: password.length >= 12 ? '#22c55e' : password.length >= 8 ? '#f4820a' : '#e63c2f',
-        borderRadius: 99,
-        transition: 'width 0.3s',
-      }} />
-    </div>
-    <div style={{ fontSize:'0.68rem', color:'#555', marginTop:'0.15rem' }}>
-      {password.length >= 12 ? 'Strong password' : password.length >= 8 ? 'Moderate — try adding more characters' : 'Weak — use at least 8 characters'}
-    </div>
-  </div>
-)}
+            {password && (
+              <div style={{ marginTop:'0.4rem' }}>
+                <div style={{ height:3, background:'#1e1e1e', borderRadius:99, overflow:'hidden' }}>
+                  <div style={{
+                    height:     '100%',
+                    width:      password.length >= 12 ? '100%' : password.length >= 8 ? '66%' : '33%',
+                    background: password.length >= 12 ? '#22c55e' : password.length >= 8 ? '#f4820a' : '#e63c2f',
+                    borderRadius: 99,
+                    transition: 'width 0.3s',
+                  }} />
+                </div>
+                <div style={{ fontSize:'0.68rem', color:'#555', marginTop:'0.15rem' }}>
+                  {password.length >= 12 ? 'Strong password' : password.length >= 8 ? 'Moderate — try adding more characters' : 'Weak — use at least 8 characters'}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Confirm Password */}
@@ -205,25 +232,24 @@ export default function RegisterPage() {
           </div>
 
           {/* Terms acceptance */}
-<div style={{ marginBottom:'1rem' }}>
-  <label style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem', cursor:'pointer' }}>
-    <input
-      type="checkbox"
-      checked={agreedToTerms}
-      onChange={e => setAgreedToTerms(e.target.checked)}
-      style={{ marginTop:'0.15rem', accentColor:'#f4820a', flexShrink:0 }}
-    />
-    <span style={{ fontSize:'0.8rem', color:'#666', lineHeight:1.5 }}>
-      I agree to the{' '}
-      <Link to="/safety" style={{ color:'#f4820a', textDecoration:'none' }}>
-        Terms of Service
-      </Link>
-      {' '}and confirm that I will only submit genuine fire reports.
-    </span>
-  </label>
-  {errors.terms && <div className="form-error" style={{ marginTop:'0.3rem' }}>{errors.terms}</div>}
-</div>
-          
+          <div style={{ marginBottom:'1rem' }}>
+            <label style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem', cursor:'pointer' }}>
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={e => setAgreedToTerms(e.target.checked)}
+                style={{ marginTop:'0.15rem', accentColor:'#f4820a', flexShrink:0 }}
+              />
+              <span style={{ fontSize:'0.8rem', color:'#666', lineHeight:1.5 }}>
+                I agree to the{' '}
+                <Link to="/safety" style={{ color:'#f4820a', textDecoration:'none' }}>
+                  Terms of Service
+                </Link>
+                {' '}and confirm that I will only submit genuine fire reports.
+              </span>
+            </label>
+            {errors.terms && <div className="form-error" style={{ marginTop:'0.3rem' }}>{errors.terms}</div>}
+          </div>
 
           {/* Submit */}
           <button type="submit" className="auth-btn" disabled={loading}>

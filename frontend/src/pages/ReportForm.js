@@ -23,6 +23,7 @@ export default function ReportForm() {
   const [description, setDescription] = useState('');
   const [fireType, setFireType] = useState('');
   const [location, setLocation] = useState({ lat: null, lng: null, address: '' });
+  const [isAnonymous, setIsAnonymous] = useState(false);
   // ── Multi-file state (max 5) ──────────────────────────────────────
   const [mediaFiles, setMediaFiles] = useState([]);       // [{ file, previewUrl, isLive }]
   const MAX_FILES = 5;
@@ -152,6 +153,7 @@ export default function ReportForm() {
       gps_validated:   String(gpsValidation?.inAddis || false),
       gps_score:       String(gpsValidation?.score || 50),
       media_is_live:   String(mediaFiles.some(f => f.isLive)),
+      isAnonymous:     String(isAnonymous),
     };
 
     // ── If device is offline, save locally immediately ──────────────
@@ -484,6 +486,29 @@ export default function ReportForm() {
                   onCancel={() => setShowCamera(false)}
                 />
               )}
+            </div>
+
+            {/* ── Anonymous reporting toggle ────────────────── */}
+            <div style={{
+              background: 'rgba(244,130,10,0.06)', border: '1px solid rgba(244,130,10,0.15)',
+              borderRadius: 8, padding: '0.85rem 1rem', marginBottom: '1rem',
+            }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isAnonymous}
+                  onChange={e => setIsAnonymous(e.target.checked)}
+                  style={{ marginTop: '0.15rem', accentColor: '#f4820a', flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f0ede8', marginBottom: '0.15rem' }}>
+                    Submit anonymously
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#666', lineHeight: 1.5 }}>
+                    Your name will not be shown to responders. Note: anonymous reports receive a lower initial trust score and cannot earn reputation points.
+                  </div>
+                </div>
+              </label>
             </div>
 
             {/* ── Submit Button ─────────────────────────────── */}

@@ -4,7 +4,7 @@ const axios    = require('axios');
 const AI_URL = 'http://localhost:5001/api/ai';
 
 // Helper — call AI service safely. If AI is down, return defaults.
-async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia, gpsScore, mediaPath, mediaIsLive) {
+async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia, gpsScore, mediaPath, mediaIsLive, isAnonymous) {
   try {
     const reportedAt = new Date().toISOString();
 
@@ -36,13 +36,22 @@ async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia, g
     // 3. Request the trust score using the enriched payload
     const trustRes = await axios.post(`${AI_URL}/score-report`, trustPayload);
 
+    let trustScore = trustRes.data.trust_score;
+    let flags = trustRes.data.flags;
+
+    // Apply penalty for anonymous reports after getting the score back
+    if (isAnonymous === true || isAnonymous === 'true') {
+      trustScore = Math.max(0, (trustScore || 50) - 15);
+      flags = [...(flags || []), 'anonymous_report'];
+    }
+
     return {
-      is_duplicate:      duplicateRes.data.is_duplicate,
-      duplicate_of:      duplicateRes.data.matching_incidents.map(m => m.incident_id),
-      severity:          severityRes.data.predicted_severity,
-      ai_trust_score:    trustRes.data.trust_score,
-      ai_risk_level:     trustRes.data.risk_level,
-      ai_flags:          trustRes.data.flags
+      is_duplicate:   duplicateRes.data.is_duplicate,
+      duplicate_of:   duplicateRes.data.matching_incidents.map(m => m.incident_id),
+      severity:       severityRes.data.predicted_severity,
+      ai_trust_score: trustScore,
+      ai_risk_level:  trustRes.data.risk_level,
+      ai_flags:       flags
     };
 
   } catch (err) {
@@ -61,7 +70,11 @@ async function getAIAnalysis(description, fire_type, lat, lng, user, hasMedia, g
 
 // POST /api/incidents
 const reportIncident = async (req, res) => {
-  const { description, fire_type, lat, lng, address, gps_validated, gps_score, media_is_live } = req.body;
+  const {
+    description, fire_type, lat, lng,
+    address, gps_validated, gps_score, media_is_live,
+    isAnonymous,
+  } = req.body;
 
   if (!description || !lat || !lng) {
     return res.status(400).json({ message: 'Description and location are required' });
@@ -73,7 +86,7 @@ const reportIncident = async (req, res) => {
     const firstMedia = hasMedia ? mediaFiles[0] : null;
     const gpsScore   = gps_score ? parseInt(gps_score, 10) : 50;
 
-    // Get AI analysis with live capture flags passed along
+    // Get AI analysis with live capture flags and anonymity status passed along
     const ai = await getAIAnalysis(
       description,
       fire_type || 'other',
@@ -83,7 +96,8 @@ const reportIncident = async (req, res) => {
       hasMedia,
       gpsScore,
       firstMedia,
-      media_is_live
+      media_is_live,
+      isAnonymous
     );
 
     const incident = await Incident.create({
@@ -96,7 +110,8 @@ const reportIncident = async (req, res) => {
         address: address || ''
       },
       mediaFiles,
-      severity:      ai.severity,
+      isAnonymous:    isAnonymous === true || isAnonymous === 'true',
+      severity:       ai.severity,
       ai_trust_score: ai.ai_trust_score,
       ai_risk_level:  ai.ai_risk_level,
       ai_flags:       ai.ai_flags,
@@ -134,10 +149,21 @@ const getMyIncidents = async (req, res) => {
 // GET /api/incidents/all
 const getAllIncidents = async (req, res) => {
   try {
-    const incidents = await Incident.find({})
-      .populate('reportedBy', 'name email')
+    const incidents = await Incident.find()
+      .populate('reportedBy', 'name email reputationScore')
       .sort({ reportedAt: -1 });
-    res.json(incidents);
+
+    // Mask reporter identity for anonymous reports shown to non-admins
+    const result = incidents.map(i => {
+      if (i.isAnonymous && req.user.role !== 'admin') {
+        const obj = i.toObject();
+        obj.reportedBy = { name: 'Anonymous', email: '' };
+        return obj;
+      }
+      return i;
+    });
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

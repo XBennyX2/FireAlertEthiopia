@@ -171,12 +171,12 @@ export default function ResponderDashboard() {
 
       <div className="dash-content">
         {loading && (
-  <>
-    <SkeletonCard lines={3} />
-    <SkeletonCard lines={3} />
-    <SkeletonCard lines={3} />
-  </>
-)}
+          <>
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+          </>
+        )}
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="dash-header">
@@ -187,7 +187,7 @@ export default function ResponderDashboard() {
           <div style={{ display:'flex', gap:'0.5rem' }}>
             <button
               className="btn-secondary"
-              onClick={() => setShowMap(v => !v)}
+              onClick={() => { setShowMap(v => !v); }}
               style={{ fontSize:'0.8rem' }}
             >
               {showMap ? '🗺️ Hide Map' : '🗺️ Show Map'}
@@ -272,6 +272,11 @@ export default function ResponderDashboard() {
               const rawType        = incident.fire_type?.toLowerCase() || 'other';
               const translatedType = t.fireTypes?.[rawType] || incident.fire_type || t.fireTypes?.other;
               const isTracking     = trackingIncidentId === incident._id;
+              
+              // Conditional reporter name logic based on the user's instructions
+              const reporterName   = incident.isAnonymous && incident.reportedBy?.name === 'Anonymous'
+                ? 'Anonymous'
+                : incident.reportedBy?.name || 'Unknown Reporter';
 
               return (
                 <div
@@ -283,9 +288,20 @@ export default function ResponderDashboard() {
                   {/* ── Top row ──────────────────────────────── */}
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                     <div>
-                      <span style={{ fontSize:'0.7rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', color:'#444' }}>
-                        {translatedType}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ fontSize:'0.7rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', color:'#444' }}>
+                          {translatedType}
+                        </span>
+                        {incident.isAnonymous && (
+                          <span style={{
+                            fontSize:'0.65rem', padding:'0.1rem 0.5rem', borderRadius:999,
+                            background:'rgba(244,130,10,0.1)', color:'#f4820a',
+                            fontWeight:700, marginLeft:'0.4rem',
+                          }}>
+                            Anonymous
+                          </span>
+                        )}
+                      </div>
                       <div style={{ marginTop:'0.2rem' }}>
                         <StatusBadge status={incident.status} t={t} />
                       </div>
@@ -323,7 +339,7 @@ export default function ResponderDashboard() {
                       src={`http://localhost:5000/${incident.mediaFiles[0]}`}
                       alt="incident"
                       style={{ width:'100%', height:140, objectFit:'cover', borderRadius:8, display:'block' }}
-                      onError={e => e.target.style.display = 'none'}
+                      onError={e => { e.target.style.display = 'none'; }}
                     />
                   )}
 
@@ -340,6 +356,11 @@ export default function ResponderDashboard() {
                   }}>
                     {incident.description}
                   </p>
+
+                  {/* ── Reporter Info Row ───────────────────── */}
+                  <div style={{ fontSize: '0.8rem', color: '#888', marginTop: '-0.25rem' }}>
+                    Reporter: <span style={{ fontWeight: 600, color: incident.isAnonymous ? '#f4820a' : '#fff' }}>{reporterName}</span>
+                  </div>
 
                   {/* ── AI flags ─────────────────────────────── */}
                   {incident.ai_flags?.length > 0 && (

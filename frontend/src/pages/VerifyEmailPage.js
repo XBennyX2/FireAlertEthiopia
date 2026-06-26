@@ -39,7 +39,39 @@ export default function VerifyEmailPage() {
     setVerifying(true);
     try {
       const { data } = await API.post('/auth/verify-email', { userId, code: code.trim() });
-      login(data); // stores token + user, same shape as a normal login response
+      login(data);
+
+      // Upload profile photo if one was set during registration
+      const pendingPhoto     = sessionStorage.getItem('pendingProfilePhoto');
+      const pendingPhotoType = sessionStorage.getItem('pendingProfilePhotoType');
+
+      if (pendingPhoto && pendingPhotoType) {
+        try {
+          // Convert base64 back to blob
+          const res  = await fetch(pendingPhoto);
+          const blob = await res.blob();
+          const ext  = pendingPhotoType.split('/')[1] || 'jpg';
+          const file = new File([blob], `profile.${ext}`, { type: pendingPhotoType });
+
+          const formData = new FormData();
+          formData.append('photo', file);
+
+          // Need to set auth header manually since login() just ran
+          await API.post('/profile/photo', formData, {
+            headers: {
+              'Content-Type':  'multipart/form-data',
+              'Authorization': `Bearer ${data.token}`,
+            },
+          });
+        } catch (photoErr) {
+          console.warn('Profile photo upload failed:', photoErr.message);
+          // Not fatal — user can upload from profile page
+        } finally {
+          sessionStorage.removeItem('pendingProfilePhoto');
+          sessionStorage.removeItem('pendingProfilePhotoType');
+        }
+      }
+
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Verification failed.');
