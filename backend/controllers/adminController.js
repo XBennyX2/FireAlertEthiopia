@@ -112,58 +112,127 @@ const getApplications = async (req, res) => {
 
 // POST /api/admin/applications — submit a responder application (any logged-in user)
 // POST /api/admin/applications — user submits a responder application
-const submitApplication = async (req, res) => {
-  try {
-    const {
-      phone,
-      yearsExperience,
-      previousTraining,
-      currentOccupation,
-      preferredStation,
-      availability,
-      motivation,
-    } = req.body;
+const multer = require('multer');
+const path   = require('path');
+const fs     = require('fs');
 
-    // Required field validation
-    if (!phone || yearsExperience === undefined || !preferredStation || !availability || !motivation) {
-      return res.status(400).json({ message: 'Please fill in all required fields.' });
+// 1. Multer Storage Configuration
+const docStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/documents';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    // Generates a safe, unique filename using user ID and current timestamp
+    cb(null, `${req.user._id}-${Date.now()}-${file.originalname.replace(/\s/g, '_')}`);
+  },
+});
+
+// 2. Multer Instance for Specific Fields
+const docUpload = multer({
+  storage: docStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF and image files are allowed.'));
+    }
+  },
+}).fields([
+  { name: 'idDocument',            maxCount: 1 },
+  { name: 'certificationDocument', maxCount: 1 },
+]);
+
+// 3. Integrated Submit Application Controller
+const submitApplication = (req, res) => {
+  // Execute multer file processing first
+  docUpload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message });
     }
 
-    if (!['full_time', 'part_time', 'on_call', 'weekends_only'].includes(availability)) {
-      return res.status(400).json({ message: 'Invalid availability option.' });
+    try {
+      const {
+        phone,
+        yearsExperience,
+        previousTraining,
+        currentOccupation,
+        preferredStation,
+        availability,
+        motivation,
+      } = req.body;
+
+      // Required field validation
+      if (!phone || yearsExperience === undefined || !preferredStation || !availability || !motivation) {
+        return res.status(400).json({ message: 'Please fill in all required fields.' });
+      }
+
+      // Format check for availability
+      if (!['full_time', 'part_time', 'on_call', 'weekends_only'].includes(availability)) {
+        return res.status(400).json({ message: 'Invalid availability option.' });
+      }
+
+      // Block duplicate pending applications
+      const existing = await Application.findOne({ applicant: req.user._id, status: 'pending' });
+      if (existing) {
+        return res.status(400).json({ message: 'You already have a pending application. Please wait for a decision before applying again.' });
+      }
+
+      // Block re-applying if already a responder
+      if (req.user.role === 'responder') {
+        return res.status(400).json({ message: 'You are already a responder.' });
+      }
+
+      // Parse and construct the documents array from uploaded files
+      const documents = [];
+      
+      if (req.files?.idDocument?.[0]) {
+        documents.push({
+          type:     'id',
+          filename: req.files.idDocument[0].originalname,
+          path:     req.files.idDocument[0].path.replace(/\\/g, '/'), // Normalize paths for cross-platform compatibility
+        });
+      }
+
+      if (req.files?.certificationDocument?.[0]) {
+        documents.push({
+          type:     'certification',
+          filename: req.files.certificationDocument[0].originalname,
+          path:     req.files.certificationDocument[0].path.replace(/\\/g, '/'),
+        });
+      }
+
+      // Database insertion
+      const application = await Application.create({
+        applicant:         req.user._id,
+        name:              req.user.name,
+        email:             req.user.email,
+        phone,
+        yearsExperience:   Number(yearsExperience), // Enforce numeric storage
+        previousTraining:  previousTraining || '',
+        currentOccupation: currentOccupation || '',
+        preferredStation,
+        availability,
+        motivation,
+        documents,
+      });
+
+      res.status(201).json({ 
+        message: 'Application submitted successfully. An admin will review it shortly.', 
+        application 
+      });
+
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
-
-    // Block duplicate pending applications
-    const existing = await Application.findOne({ applicant: req.user._id, status: 'pending' });
-    if (existing) {
-      return res.status(400).json({ message: 'You already have a pending application. Please wait for a decision before applying again.' });
-    }
-
-    // Block re-applying if already a responder
-    if (req.user.role === 'responder') {
-      return res.status(400).json({ message: 'You are already a responder.' });
-    }
-
-    const application = await Application.create({
-      applicant:          req.user._id,
-      name:                req.user.name,
-      email:               req.user.email,
-      phone,
-      yearsExperience,
-      previousTraining:   previousTraining || '',
-      currentOccupation:  currentOccupation || '',
-      preferredStation,
-      availability,
-      motivation,
-    });
-
-    res.status(201).json({ message: 'Application submitted successfully. An admin will review it shortly.', application });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  });
 };
 
+module.exports = { submitApplication };
 // PUT /api/admin/applications/:id/approve
 const approveApplication = async (req, res) => {
   try {

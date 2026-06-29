@@ -1,8 +1,10 @@
-const User               = require('../models/User');
+const User                = require('../models/User');
 const EmailVerification   = require('../models/EmailVerification');
 const Session             = require('../models/Session');
-const jwt     = require('jsonwebtoken');
-const bcrypt  = require('bcryptjs');
+const jwt                 = require('jsonwebtoken');
+const bcrypt              = require('bcryptjs');
+const LoginHistory = require('../models/LoginHistory');
+
 const {
   recordFailedAttempt,
   clearFailedAttempts,
@@ -48,7 +50,7 @@ async function issueVerificationCode(user) {
 
 // ── Register ──────────────────────────────────────────────────────
 const register = async (req, res) => {
-  const { name, email, password, phone } = req.body; // ← add phone
+  const { name, email, password, phone } = req.body; 
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Please provide name, email and password' });
@@ -71,7 +73,7 @@ const register = async (req, res) => {
       name:       name.trim(),
       email:      email.toLowerCase().trim(),
       password:   hashedPassword,
-      phone:      phone?.trim() || '',   // ← save phone
+      phone:      phone?.trim() || '',   
       isVerified: false,
     });
 
@@ -207,12 +209,32 @@ const login = async (req, res) => {
     }
 
     await clearFailedAttempts(user._id);
-
+    
     user.lastLogin = new Date();
     await user.save();
 
+    // ── 2FA check ──────────────────────────────────────────────────
+    if (user.twoFactorEnabled) {
+      // Send OTP — don't return token yet
+      await issueVerificationCode(user);
+      return res.json({
+        requiresTwoFactor: true,
+        userId:  user._id,
+        email:   user.email,
+        message: `A verification code has been sent to ${user.email}.`,
+      });
+    }
+
+    // No 2FA — issue token immediately
     const token = generateRefreshableToken(user._id);
     await createSession(user._id, token, req);
+    await LoginHistory.create({
+  userId:    user._id,
+  ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+  userAgent: req.headers['user-agent'] || '',
+  method:    user.twoFactorEnabled ? '2fa' : 'email',
+  success:   true,
+}).catch(() => {});
 
     res.json({
       _id:              user._id,
@@ -243,4 +265,139 @@ const logout = async (req, res) => {
   }
 };
 
-module.exports = { register, login, verifyEmail, resendVerificationCode, logout };
+// ── Enable 2FA — sends a test code to confirm setup ───────────────
+const enableTwoFactor = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.twoFactorEnabled) {
+      return res.status(400).json({ message: '2FA is already enabled.' });
+    }
+
+    // Send a verification code to confirm they own the email
+    await issueVerificationCode(user);
+
+    res.json({ message: `A 6-digit code has been sent to ${user.email}. Enter it to confirm 2FA setup.` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── Confirm 2FA setup ─────────────────────────────────────────────
+const confirmTwoFactor = async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: 'Code is required.' });
+
+    const record = await EmailVerification.findOne({ userId: req.user._id, code });
+    if (!record || record.expiresAt < new Date()) {
+      return res.status(400).json({ message: 'Invalid or expired code.' });
+    }
+
+    await EmailVerification.deleteMany({ userId: req.user._id });
+
+    const user = await User.findById(req.user._id);
+    user.twoFactorEnabled  = true;
+    user.twoFactorVerified = true;
+    await user.save();
+
+    res.json({ message: '2FA enabled successfully. You will now receive a code each time you log in.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── Disable 2FA ───────────────────────────────────────────────────
+const disableTwoFactor = async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: 'Enter your current 2FA code to disable it.' });
+
+    const record = await EmailVerification.findOne({ userId: req.user._id, code });
+    if (!record || record.expiresAt < new Date()) {
+      return res.status(400).json({ message: 'Invalid or expired code.' });
+    }
+
+    await EmailVerification.deleteMany({ userId: req.user._id });
+
+    const user = await User.findById(req.user._id);
+    user.twoFactorEnabled  = false;
+    user.twoFactorVerified = false;
+    await user.save();
+
+    res.json({ message: '2FA has been disabled.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── Verify 2FA code at login ──────────────────────────────────────
+const verifyTwoFactor = async (req, res) => {
+  try {
+    const { userId, code } = req.body;
+    if (!userId || !code) return res.status(400).json({ message: 'Missing details.' });
+
+    const record = await EmailVerification.findOne({ userId, code });
+    if (!record || record.expiresAt < new Date()) {
+      if (record) await EmailVerification.deleteOne({ _id: record._id });
+      return res.status(400).json({ message: 'Invalid or expired code. Request a new one.' });
+    }
+
+    await EmailVerification.deleteMany({ userId });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = generateRefreshableToken(user._id);
+    await createSession(user._id, token, req);
+    await LoginHistory.create({
+  userId:    user._id,
+  ipAddress: req.ip || req.headers['x-forwarded-for'] || '',
+  userAgent: req.headers['user-agent'] || '',
+  method:    user.twoFactorEnabled ? '2fa' : 'email',
+  success:   true,
+}).catch(() => {});
+
+    res.json({
+      _id:              user._id,
+      name:             user.name,
+      email:            user.email,
+      role:             user.role,
+      reputationScore:  user.reputationScore,
+      falseReportCount: user.falseReportCount,
+      profilePhoto:     user.profilePhoto,
+      token,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ── Resend 2FA code at login ──────────────────────────────────────
+const resendTwoFactorCode = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: 'Missing user id.' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (!user.twoFactorEnabled) {
+      return res.status(400).json({ message: '2FA is not enabled for this account.' });
+    }
+
+    await issueVerificationCode(user);
+    res.json({ message: 'A new code has been sent to your email.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+module.exports = { 
+  register, login, verifyEmail, resendVerificationCode, logout,
+  enableTwoFactor, confirmTwoFactor, disableTwoFactor,
+  verifyTwoFactor, resendTwoFactorCode,
+};

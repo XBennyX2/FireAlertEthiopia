@@ -32,5 +32,14 @@ router.delete('/sessions/:id',     protect, revokeSession);
 
 // GDPR Export route
 router.get('/export',              protect, exportUserData);
-
+router.put('/notification-prefs', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.notificationPrefs = { ...user.notificationPrefs, ...req.body };
+    await user.save();
+    res.json({ message: 'Preferences saved.', notificationPrefs: user.notificationPrefs });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 module.exports = router;

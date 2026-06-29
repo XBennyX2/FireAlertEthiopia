@@ -30,6 +30,49 @@ const {
   importUsersCSV
 } = require('../controllers/adminController');
 
+const Appeal = require('../models/Appeal');
+
+router.get('/appeals', protect, authorize('admin'), async (req, res) => {
+  try {
+    const appeals = await Appeal.find({ status: 'pending' })
+      .populate('userId', 'name email reputationScore isBanned')
+      .sort({ createdAt: -1 });
+    res.json(appeals);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+router.put('/appeals/:id/approve', protect, authorize('admin'), async (req, res) => {
+  try {
+    const appeal = await Appeal.findById(req.params.id).populate('userId');
+    if (!appeal) return res.status(404).json({ message: 'Appeal not found.' });
+
+    // Unban the user
+    const { applyReputationConsequences } = require('../utils/reputationManager');
+    await applyReputationConsequences(appeal.userId._id, 65);
+
+    appeal.status     = 'approved';
+    appeal.reviewedBy = req.user._id;
+    await appeal.save();
+
+    await log(req.user._id, 'APPEAL_APPROVED', `Appeal approved for ${appeal.userId.email}`);
+    res.json({ message: 'Appeal approved. User unbanned.' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+router.put('/appeals/:id/deny', protect, authorize('admin'), async (req, res) => {
+  try {
+    const appeal = await Appeal.findById(req.params.id);
+    if (!appeal) return res.status(404).json({ message: 'Appeal not found.' });
+
+    appeal.status     = 'denied';
+    appeal.adminNote  = req.body.note || '';
+    appeal.reviewedBy = req.user._id;
+    await appeal.save();
+
+    res.json({ message: 'Appeal denied.' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
 // ── Admin-Only Routes ─────────────────────────────────────────────
 
 // User Management

@@ -169,4 +169,69 @@ const getAllIncidents = async (req, res) => {
   }
 };
 
+const getPublicFeed = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const query = {
+      status: status ? status : { $in: ['verified','dispatched','resolved'] },
+      isAnonymous: false, // never show anonymous in public feed
+    };
+
+    const incidents = await Incident.find(query)
+      .select('fire_type severity status location reportedAt description')
+      .sort({ reportedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    // Strip exact GPS — only show approximate area
+    const safe = incidents.map(i => ({
+      _id:       i._id,
+      fire_type: i.fire_type,
+      severity:  i.severity,
+      status:    i.status,
+      address:   i.location?.address || 'Addis Ababa',
+      reportedAt:i.reportedAt,
+      // Round coordinates to ~500m precision for privacy
+      lat: i.location?.lat ? Math.round(i.location.lat * 200) / 200 : null,
+      lng: i.location?.lng ? Math.round(i.location.lng * 200) / 200 : null,
+    }));
+
+    const total = await Incident.countDocuments(query);
+
+    res.json({ incidents: safe, total, pages: Math.ceil(total / limit) });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const exportMyIncidents = async (req, res) => {
+  try {
+    const incidents = await Incident.find({ reportedBy: req.user._id })
+      .sort({ reportedAt: -1 });
+
+    const { stringify } = require('csv-stringify/sync');
+    const rows = incidents.map(i => ({
+      id:           i._id.toString(),
+      fire_type:    i.fire_type,
+      severity:     i.severity,
+      status:       i.status,
+      description:  i.description,
+      address:      i.location?.address || '',
+      lat:          i.location?.lat || '',
+      lng:          i.location?.lng || '',
+      ai_trust_score: i.ai_trust_score || '',
+      is_anonymous: i.isAnonymous ? 'Yes' : 'No',
+      reported_at:  i.reportedAt?.toISOString() || '',
+      resolved_at:  i.resolvedAt?.toISOString() || '',
+    }));
+
+    const csv = stringify(rows, { header: true });
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=my-reports-${Date.now()}.csv`);
+    res.send(csv);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = { reportIncident, getMyIncidents, getAllIncidents };

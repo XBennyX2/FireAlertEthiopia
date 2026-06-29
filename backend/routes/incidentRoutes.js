@@ -37,6 +37,9 @@ const upload = multer({
 });
 
 // Routes
+// Public — no auth required
+router.get('/mine/export', protect, exportMyIncidents);
+router.get('/public', getPublicFeed);
 router.post('/',    protect, authorize('user'),                    upload.array('media', 5), reportIncident);
 router.get('/mine', protect, authorize('user'),                    getMyIncidents);
 router.get('/all',  protect, authorize('admin', 'responder'),      getAllIncidents);

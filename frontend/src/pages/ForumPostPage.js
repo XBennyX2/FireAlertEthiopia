@@ -276,6 +276,19 @@ export default function ForumPostPage() {
           <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', paddingTop:'0.75rem', borderTop:'1px solid var(--border)' }}>
             <Avatar user={post.author} size={28} />
             <span style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{post.author?.name}</span>
+            
+            {/* Reputation Score Badge (Post Author) */}
+            <span style={{
+              fontSize:'0.65rem', padding:'0.1rem 0.45rem', borderRadius:999,
+              background: post.author?.reputationScore >= 80 ? 'rgba(34,197,94,0.1)' :              
+                          post.author?.reputationScore >= 60 ? 'rgba(244,130,10,0.1)' : 'rgba(230,60,47,0.1)',
+              color:      post.author?.reputationScore >= 80 ? '#22c55e' :              
+                          post.author?.reputationScore >= 60 ? '#f4820a' : '#e63c2f',
+              fontWeight: 700,
+            }}>
+              ⭐ {post.author?.reputationScore ?? 100}
+            </span>
+
             <span style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{fmtDate(post.createdAt)}</span>
             {post.editedAt && <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>(edited)</span>}
             <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', marginLeft:'auto' }}>👁 {post.views}</span>
@@ -356,6 +369,19 @@ export default function ForumPostPage() {
                     <span style={{ fontSize:'0.8rem', fontWeight:600, color:'var(--text-primary)' }}>
                       {reply.author?.name}
                     </span>
+
+                    {/* Reputation Score Badge (Reply Author) */}
+                    <span style={{
+                      fontSize:'0.65rem', padding:'0.1rem 0.45rem', borderRadius:999,
+                      background: reply.author?.reputationScore >= 80 ? 'rgba(34,197,94,0.1)' :              
+                                  reply.author?.reputationScore >= 60 ? 'rgba(244,130,10,0.1)' : 'rgba(230,60,47,0.1)',
+                      color:      reply.author?.reputationScore >= 80 ? '#22c55e' :              
+                                  reply.author?.reputationScore >= 60 ? '#f4820a' : '#e63c2f',
+                      fontWeight: 700,
+                    }}>
+                      ⭐ {reply.author?.reputationScore ?? 100}
+                    </span>
+
                     {reply.author?.role === 'responder' && (
                       <span style={{ fontSize:'0.62rem', padding:'0.1rem 0.4rem', background:'rgba(59,130,246,0.1)', color:'#3b82f6', borderRadius:999, fontWeight:600 }}>
                         🚒 Responder

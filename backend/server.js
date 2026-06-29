@@ -26,6 +26,8 @@ const io     = new Server(server, {
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
+const passport = require('./config/passport');
+app.use(passport.initialize());
 
 app.set('io', io);
 

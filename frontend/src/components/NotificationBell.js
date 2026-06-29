@@ -201,6 +201,22 @@ export default function NotificationBell() {
     return () => socket.disconnect();
   }, [user]);
 
+  useEffect(() => {
+  if (!user) return;
+  // Request push notification permission once
+  const key = `push_asked_${user._id}`;
+  if (!localStorage.getItem(key) && 'Notification' in window) {
+    setTimeout(() => {
+      Notification.requestPermission().then(permission => {
+        localStorage.setItem(key, '1');
+        if (permission === 'granted') {
+          console.log('Push notification permission granted');
+        }
+      });
+    }, 5000); // Ask after 5s so it doesn't interrupt page load
+  }
+}, [user]);
+
   // ── Close dropdown when clicking outside ───────────────────────
   useEffect(() => {
     function handleClick(e) {

@@ -22,6 +22,12 @@ import ForumPostPage from './pages/ForumPostPage';
 import ApplyResponderPage from './pages/ApplyResponderPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SafetyPage from './pages/SafetyPage';
+import OAuthCallbackPage from './pages/OAuthCallbackPage';
+import TwoFactorPage from './pages/TwoFactorPage';
+import ServerErrorPage from './pages/ServerErrorPage';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
+import PublicFeedPage from './pages/PublicFeedPage';
+
 
 
 function App() {
@@ -64,6 +70,13 @@ function App() {
 <Route path="/verify-email" element={<VerifyEmailPage />} />
 
 <Route path="/safety" element={<SafetyPage />} />
+<Route path="/oauth-callback" element={<OAuthCallbackPage />} />
+<Route path="/two-factor" element={<TwoFactorPage />} />
+<Route path="/500" element={<ServerErrorPage />} />
+<Route path="/feed" element={<PublicFeedPage />} />
+
+
+
 
           {/* User-only routes */}
           <Route path="/dashboard" element={
@@ -106,6 +119,8 @@ function App() {
             </ProtectedRoute>
           } />
         </Routes>
+        <PWAInstallPrompt />
+
         {/* Public routes */}
 
       </Router>

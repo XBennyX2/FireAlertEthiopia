@@ -66,6 +66,7 @@ async function sendVerificationCode(toEmail, code, purpose = 'email change') {
     html,
   });
 }
+
 // ── Send password reset link ──────────────────────────────────────
 async function sendPasswordResetEmail(toEmail, resetLink) {
   const html = `
@@ -120,9 +121,45 @@ async function sendPasswordResetEmail(toEmail, resetLink) {
   });
 }
 
+// ── Send incident status updates ──────────────────────────────────
+async function sendStatusUpdateEmail(toEmail, userName, status, fireType, incidentId) {
+  const messages = {
+    verified:   { subject: 'Your fire report has been verified', body: 'A responder has verified your report and is assessing the situation.' },
+    dispatched: { subject: 'Responders dispatched to your report', body: 'Fire responders have been dispatched to the location you reported.' },
+    resolved:   { subject: 'Your reported incident has been resolved', body: 'The fire incident you reported has been resolved by our responders.' },
+    rejected:   { subject: 'Update on your fire report', body: 'After assessment, your report could not be verified. This may affect your reputation score.' },
+  };
+
+  const info = messages[status];
+  if (!info) return;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #0e0e0e; color: #f0ede8; padding: 2rem; border-radius: 12px;">
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <div style="background: linear-gradient(135deg, #e63c2f, #f4820a); width: 48px; height: 48px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.5rem;">🔥</div>
+        <h1 style="font-size: 1.1rem; font-weight: 800; margin: .5rem 0 0; color: #f0ede8;">FireAlert</h1>
+      </div>
+      <h2 style="font-size: 1rem; color: #f0ede8; margin: 0 0 .75rem;">${info.subject}</h2>
+      <p style="font-size: .875rem; color: #888; line-height: 1.6; margin: 0 0 1rem;">Hi ${userName}, ${info.body}</p>
+      <div style="background: #161616; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+        <div style="font-size: .75rem; color: #555; margin-bottom: .25rem;">Fire Type</div>
+        <div style="font-size: .9rem; font-weight: 600; text-transform: capitalize;">${fireType || 'N/A'}</div>
+      </div>
+      <p style="font-size: .75rem; color: #555;">Open the FireAlert app to view full details.</p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from:    process.env.EMAIL_FROM,
+    to:      toEmail,
+    subject: info.subject,
+    html,
+  });
+}
+
 module.exports = {
   generateVerificationCode,
   sendVerificationCode,
   sendPasswordResetEmail,
+  sendStatusUpdateEmail,
 };
-module.exports = { generateVerificationCode, sendVerificationCode };

@@ -42,11 +42,12 @@ const getPosts = async (req, res) => {
 
     const total = await ForumPost.countDocuments(query);
     const posts = await ForumPost.find(query)
-      .populate('author', 'name profilePhoto reputationScore')
       .sort({ isPinned: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
-      .select('-replies');
+      .select('-replies')
+      .populate('author', 'name role profilePhoto reputationScore')
+      .populate('replies.author', 'name role profilePhoto reputationScore');
 
     res.json({ posts, total, page: parseInt(page), pages: Math.ceil(total / limit) });
 
@@ -60,7 +61,9 @@ const getPost = async (req, res) => {
   try {
     const post = await ForumPost.findById(req.params.id)
       .populate('author',         'name profilePhoto reputationScore role')
-      .populate('replies.author', 'name profilePhoto role');
+      .populate('replies.author', 'name profilePhoto role')
+      .populate('author', 'name role profilePhoto reputationScore')
+      .populate('replies.author', 'name role profilePhoto reputationScore');
 
     if (!post || post.isRemoved) {
       return res.status(404).json({ message: 'Post not found' });

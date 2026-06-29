@@ -9,6 +9,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useToast } from '../context/ToastContext';
 import { useRef } from 'react';
 import SkeletonCard from '../components/SkeletonCard';
+import AdminIncidentMap from '../components/AdminIncidentMap';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -21,7 +22,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'health'
+  const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'health' | 'safety' | 'appeals'
 
   const [users,    setUsers]    = useState([]);
   const [apps,     setApps]     = useState([]);
@@ -49,6 +50,9 @@ export default function AdminDashboard() {
 
   // Health state
   const [health, setHealth] = useState(null);
+
+  // Appeals state
+  const [appeals, setAppeals] = useState([]);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -284,6 +288,11 @@ export default function AdminDashboard() {
     loadSafety();
   }, [tab]);
 
+  useEffect(() => {
+    if (tab !== 'appeals') return;
+    API.get('/admin/appeals').then(({ data }) => setAppeals(data)).catch(() => {});
+  }, [tab]);
+
   async function handleApproveContent(id) {
     try {
       await API.put(`/safety/${id}/approve`);
@@ -438,6 +447,13 @@ export default function AdminDashboard() {
               </span>
             )}
           </button>
+          <button style={TAB_STYLE('appeals')} onClick={() => setTab('appeals')}>
+            ⚖️ Appeals {appeals.length > 0 && (
+              <span style={{ marginLeft:4, background:'#e63c2f', color:'#fff', borderRadius:999, fontSize:'0.65rem', padding:'1px 6px' }}>
+                {appeals.length}
+              </span>
+            )}
+          </button>
           <button style={TAB_STYLE('health')} onClick={() => setTab('health')}>
             System Health
           </button>
@@ -563,12 +579,12 @@ export default function AdminDashboard() {
           </div>
         )}
         {loading && (
-  <>
-    <SkeletonCard lines={3} />
-    <SkeletonCard lines={3} />
-    <SkeletonCard lines={3} />
-  </>
-)}
+          <>
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+          </>
+        )}
 
         {/* ── Users Tab ────────────────────────────────────────── */}
         {!loading && tab === 'users' && (
@@ -714,10 +730,37 @@ export default function AdminDashboard() {
                   <div style={{ color:'var(--text-dim)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.2rem' }}>Motivation</div>
                   <div style={{ color:'var(--text-primary)', fontSize:'0.82rem', lineHeight:1.55 }}>{app.motivation}</div>
                 </div>
+
+                {app.documents?.length > 0 && (
+                  <div style={{ marginTop:'0.85rem' }}>
+                    <div style={{ color:'var(--text-dim)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.4rem' }}>
+                      Uploaded Documents
+                    </div>
+                    <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
+                      {app.documents.map((doc, i) => (
+                        <a
+                          key={i}
+                          href={`http://localhost:5000/${doc.path}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            fontSize:'0.72rem', padding:'0.2rem 0.6rem', borderRadius:4,
+                            background:'rgba(59,130,246,0.1)', color:'#3b82f6',
+                            textDecoration:'none', border:'1px solid rgba(59,130,246,0.2)',
+                          }}
+                        >
+                          📎 {doc.type === 'id' ? 'ID Document' : 'Certification'} — {doc.filename}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
+
+        
 
         {/* ── Audit Logs Tab ───────────────────────────────────── */}
         {!loading && tab === 'audit' && (
@@ -839,8 +882,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <IncidentMap
-              key={allIncidents.map(i => i._id + i.status).join('-')}
+            <AdminIncidentMap
               incidents={allIncidents}
               height={520}
             />
@@ -960,6 +1002,45 @@ export default function AdminDashboard() {
                 </div>
                 <div style={{ fontSize:'0.82rem', color:'var(--text-muted)', lineHeight:1.65, whiteSpace:'pre-line' }}>
                   {item.body}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Appeals Tab ──────────────────────────────────────────── */}
+        {!loading && tab === 'appeals' && (
+          <div>
+            {appeals.length === 0 && (
+              <div className="empty-state"><div className="empty-state-icon">⚖️</div><div>No pending appeals.</div></div>
+            )}
+            {appeals.map(a => (
+              <div key={a._id} className="card" style={{ marginBottom:'0.75rem' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.75rem', marginBottom:'0.75rem' }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{a.userId?.name}</div>
+                    <div style={{ fontSize:'0.75rem', color:'#666' }}>{a.userId?.email} · Rep: {a.userId?.reputationScore}</div>
+                    <div style={{ fontSize:'0.72rem', color:'#444', marginTop:'0.2rem' }}>{new Date(a.createdAt).toLocaleDateString()}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:'0.5rem' }}>
+                    <button className="btn-primary" style={{ fontSize:'0.75rem' }}
+                      onClick={async () => {
+                        await API.put(`/admin/appeals/${a._id}/approve`);
+                        setAppeals(prev => prev.filter(x => x._id !== a._id));
+                        toast.success('Appeal approved. User unbanned.');
+                      }}>✔ Approve</button>
+                    <button className="btn-danger" style={{ fontSize:'0.75rem' }}
+                      onClick={async () => {
+                        const note = window.prompt('Reason for denial (optional):') || '';
+                        await API.put(`/admin/appeals/${a._id}/deny`, { note });
+                        setAppeals(prev => prev.filter(x => x._id !== a._id));
+                        toast.success('Appeal denied.');
+                      }}>✕ Deny</button>
+                  </div>
+                </div>
+                <div style={{ fontSize:'0.82rem', color:'var(--text-muted)', lineHeight:1.6 }}>
+                  <strong style={{ color:'var(--text-primary)', fontSize:'0.75rem' }}>Appeal reason:</strong><br />
+                  {a.reason}
                 </div>
               </div>
             ))}

@@ -82,6 +82,10 @@ export default function SafetyPage() {
           {!user && (
             <Link to="/login" className="btn-secondary" style={{ fontSize:'0.78rem' }}>Sign In</Link>
           )}
+
+          <Link to="/feed" className="btn-secondary" style={{ fontSize:'0.78rem' }}>
+  🔥 Live Incident Feed
+</Link>
         </div>
       </nav>
 

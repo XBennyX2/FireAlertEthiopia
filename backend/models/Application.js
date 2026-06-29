@@ -14,6 +14,12 @@ const applicationSchema = new mongoose.Schema({
   yearsExperience:   { type: Number, required: true, min: 0 },
   previousTraining:  { type: String },
   currentOccupation: { type: String },
+  documents: [{
+  type:     { type: String, enum: ['id', 'certification', 'other'] },
+  filename: { type: String },
+  path:     { type: String },
+  uploadedAt: { type: Date, default: Date.now },
+}],
 
   // Assignment preferences
   preferredStation: { type: String, required: true },

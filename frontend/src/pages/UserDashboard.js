@@ -11,6 +11,9 @@ import '../dashboard.css';
 import SearchFilterBar from '../components/SearchFilterBar';
 import OfflineSyncBar from '../components/OfflineSyncBar';
 import SkeletonCard from '../components/SkeletonCard';
+import OnboardingTour from '../components/OnboardingTour';
+import { toast } from 'react-hot-toast';
+
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -96,6 +99,8 @@ export default function UserDashboard() {
 
   return (
     <div className="dash-page">
+      <OnboardingTour />
+
 
       {/* ── Top Bar ─────────────────────────────────────────────── */}
       <nav className="dash-topbar">
@@ -162,6 +167,24 @@ export default function UserDashboard() {
 <Link to="/safety" className="btn-secondary" style={{ fontSize:'0.78rem' }}>
   🛡️ Safety Center
 </Link>
+<button
+  className="btn-secondary"
+  style={{ fontSize:'0.78rem' }}
+  onClick={async () => {
+    try {
+      const res = await API.get('/incidents/mine/export', { responseType:'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.setAttribute('download', `my-reports-${Date.now()}.csv`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch { toast.error('Export failed.'); }
+  }}
+>
+  ⬇ Export My Reports
+</button>
           <Link to="/report" className="btn-primary">🚨 {t.reportAFire}</Link>
         </div>
         <OfflineSyncBar />

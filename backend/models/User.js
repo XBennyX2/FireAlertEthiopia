@@ -18,6 +18,16 @@ const userSchema = new mongoose.Schema({
   lastLogin:        { type: Date },
   loginAttempts:    { type: Number, default: 0 },
   lockUntil:        { type: Date },
+  googleId:         { type: String, default: '' },
+  twoFactorEnabled: { type: Boolean, default: false },
+  twoFactorVerified:{ type: Boolean, default: false },
+  notificationPrefs: {
+  emailOnVerified:   { type: Boolean, default: true },
+  emailOnDispatched: { type: Boolean, default: true },
+  emailOnResolved:   { type: Boolean, default: true },
+  emailOnRejected:   { type: Boolean, default: true },
+  pushEnabled:       { type: Boolean, default: true },
+}
 });
 
 module.exports = mongoose.model('User', userSchema);

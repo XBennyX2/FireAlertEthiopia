@@ -12,6 +12,9 @@ function openDB() {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'localId' });
         store.createIndex('createdAt', 'createdAt', { unique: false });
       }
+      if (!db.objectStoreNames.contains('cachedIncidents')) {
+        db.createObjectStore('cachedIncidents', { keyPath: 'id' });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -126,4 +129,21 @@ export function base64ToFile(base64, filename, mimeType) {
     u8arr[n] = bstr.charCodeAt(n);
   }
   return new File([u8arr], filename, { type: mimeType });
+}
+
+export async function cacheIncident(incident) {
+  const db = await openDB();
+  const tx = db.transaction('cachedIncidents', 'readwrite');
+  tx.objectStore('cachedIncidents').put({
+    id: incident._id,
+    data: incident,
+    cachedAt: Date.now(),
+  });
+  return tx.complete;
+}
+
+export async function getCachedIncident(id) {
+  const db = await openDB();
+  const tx = db.transaction('cachedIncidents', 'readonly');
+  return tx.objectStore('cachedIncidents').get(id);
 }

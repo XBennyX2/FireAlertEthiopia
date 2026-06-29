@@ -6,6 +6,8 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import NotificationBell from '../components/NotificationBell';
 import API from '../api/axios';
 import '../dashboard.css';
+import { cacheIncident, getCachedIncident } from '../utils/offlineDB';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -30,6 +32,7 @@ export default function IncidentDetailPage() {
   const { user, logout }   = useAuth();
   const { t }              = useLanguage();
   const navigate           = useNavigate();
+  const isOnline           = useOnlineStatus();
 
   const [incident,    setIncident]    = useState(null);
   const [loading,     setLoading]     = useState(true);
@@ -41,14 +44,27 @@ export default function IncidentDetailPage() {
       try {
         const { data } = await API.get(`/incidents/${id}`);
         setIncident(data);
+        // Cache for offline use
+        cacheIncident(data).catch(() => {});
       } catch (err) {
-        setError(err.response?.data?.message || 'Could not load incident.');
+        if (!isOnline) {
+          // Try to load from cache
+          const cached = await getCachedIncident(id).catch(() => null);
+          if (cached?.data) {
+            setIncident(cached.data);
+            setError('');
+          } else {
+            setError('You are offline and this report is not cached.');
+          }
+        } else {
+          setError(err.response?.data?.message || 'Failed to load incident.');
+        }
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [id]);
+  }, [id, isOnline]);
 
   const dashLink = user?.role === 'admin'
     ? '/admin'
@@ -125,10 +141,28 @@ export default function IncidentDetailPage() {
           <button className="dash-logout-btn" onClick={() => { logout(); navigate('/'); }}>
             {t.signOut}
           </button>
+          <button
+            className="btn-secondary"
+            style={{ fontSize:'0.78rem' }}
+            onClick={() => window.print()}
+          >
+            🖨️ Print
+          </button>
         </div>
       </nav>
 
       <div className="dash-content" style={{ maxWidth:760 }}>
+        
+        {/* ── Offline Banner ───────────────────────────────────── */}
+        {!isOnline && incident && (
+          <div style={{
+            background:'rgba(244,130,10,0.1)', border:'1px solid rgba(244,130,10,0.2)',
+            borderRadius:8, padding:'0.65rem 1rem', fontSize:'0.8rem',
+            color:'#f4820a', marginBottom:'1rem',
+          }}>
+            📴 You are offline. Showing cached version of this report.
+          </div>
+        )}
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="dash-header">

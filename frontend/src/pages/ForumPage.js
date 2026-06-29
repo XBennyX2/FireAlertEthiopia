@@ -269,7 +269,7 @@ export default function ForumPage() {
               onMouseOver={e  => e.currentTarget.style.borderColor = 'var(--border-2)'}
               onMouseOut={e   => e.currentTarget.style.borderColor = 'var(--border)'}
             >
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.75rem' }}>
+              <div style={{ display:'flex', justifycontent:'space-between', alignItems:'flex-start', gap:'0.75rem' }}>
                 <div style={{ flex:1, minWidth:0 }}>
 
                   {/* Top row: category + verified + pinned */}
@@ -315,6 +315,18 @@ export default function ForumPage() {
                         }
                       </div>
                       <span style={{ fontSize:'0.72rem', color:'var(--text-dim)' }}>{post.author?.name}</span>
+                      
+                      {/* Reputation Score Badge */}
+                      <span style={{
+                        fontSize:'0.65rem', padding:'0.1rem 0.45rem', borderRadius:999,
+                        background: post.author?.reputationScore >= 80 ? 'rgba(34,197,94,0.1)' :              
+                                    post.author?.reputationScore >= 60 ? 'rgba(244,130,10,0.1)' : 'rgba(230,60,47,0.1)',
+                        color:      post.author?.reputationScore >= 80 ? '#22c55e' :              
+                                    post.author?.reputationScore >= 60 ? '#f4820a' : '#e63c2f',
+                        fontWeight: 700,
+                      }}>
+                        ⭐ {post.author?.reputationScore ?? 100}
+                      </span>
                     </div>
 
                     <span style={{ fontSize:'0.72rem', color:'var(--text-dim)' }}>{fmtDate(post.createdAt)}</span>

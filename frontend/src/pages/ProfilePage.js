@@ -47,6 +47,15 @@ export default function ProfilePage() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [revokingId,      setRevokingId]      = useState('');
 
+  // ── 2FA state ─────────────────────────────────────────────────────
+  const [twoFactorEnabled,   setTwoFactorEnabled]   = useState(user?.twoFactorEnabled || false);
+  const [twoFactorSetupCode, setTwoFactorSetupCode] = useState('');
+  const [twoFactorStep,      setTwoFactorStep]      = useState('idle'); // 'idle' | 'confirm' | 'disable'
+  const [twoFactorMsg,       setTwoFactorMsg]       = useState('');
+
+  // ── Notification preferences ──────────────────────────────────────
+  const [notifPrefs, setNotifPrefs] = useState(user?.notificationPrefs || {});
+
   // ── UI state ──────────────────────────────────────────────────────
   const [activeTab,      setActiveTab]      = useState('profile');
   const [saving,         setSaving]         = useState(false);
@@ -65,6 +74,7 @@ export default function ProfilePage() {
         setEmail(data.email       || '');
         setPhone(data.phone       || '');
         setPhoto(data.profilePhoto || '');
+        if (data.notificationPrefs) setNotifPrefs(data.notificationPrefs);
       } catch (err) {
         console.error('Failed to load profile:', err.message);
       }
@@ -78,6 +88,14 @@ export default function ProfilePage() {
     const timer = setTimeout(() => setCodeCountdown(v => v - 1), 1000);
     return () => clearTimeout(timer);
   }, [codeCountdown]);
+
+  // ── Sync 2FA status and load sessions when Security tab opens ─────
+  useEffect(() => {
+    if (activeTab === 'security') {
+      setTwoFactorEnabled(user?.twoFactorEnabled || false);
+      loadSessions();
+    }
+  }, [activeTab]);
 
   const repLevel = getReputationLevel(user?.reputationScore ?? 100);
   const repTips  = getReputationTips(user?.reputationScore ?? 100);
@@ -249,6 +267,41 @@ export default function ProfilePage() {
 
   const dashLink = getDashboardLink(user?.role);
 
+  function LoginHistoryList() {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    API.get('/auth/login-history')
+      .then(({ data }) => setHistory(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color:'var(--text-muted)', fontSize:'0.82rem' }}>Loading…</div>;
+
+  return (
+    <div>
+      {history.map(h => (
+        <div key={h._id} style={{ display:'flex', justifyContent:'space-between', padding:'0.6rem 0', borderBottom:'1px solid #111', fontSize:'0.8rem' }}>
+          <div>
+            <div style={{ color:'var(--text-primary)', marginBottom:'0.15rem' }}>
+              {h.userAgent?.split(')')[0]?.replace('Mozilla/5.0 (','') || 'Unknown device'}
+            </div>
+            <div style={{ color:'#555', fontSize:'0.72rem' }}>
+              IP: {h.ipAddress || 'Unknown'} · via {h.method}
+            </div>
+          </div>
+          <div style={{ color:'#444', fontSize:'0.72rem', whiteSpace:'nowrap' }}>
+            {new Date(h.createdAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+          </div>
+        </div>
+      ))}
+      {history.length === 0 && <div style={{ color:'#555', fontSize:'0.82rem' }}>No login history recorded yet.</div>}
+    </div>
+  );
+}
+
   return (
    <div className="dash-page">
 
@@ -376,17 +429,28 @@ export default function ProfilePage() {
 
         {/* ── Tabs — role-aware ────────────────────────────────── */}
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1.5rem' }}>
-          <button style={TAB('profile')}  onClick={() => setActiveTab('profile')}>Profile Info</button>
-          <button style={TAB('password')} onClick={() => setActiveTab('password')}>Password</button>
+          <button style={TAB('profile')}       onClick={() => setActiveTab('profile')}>Profile Info</button>
+          <button style={TAB('password')}      onClick={() => setActiveTab('password')}>Password</button>
           {user?.role === 'user' && (
             <button style={TAB('reputation')} onClick={() => setActiveTab('reputation')}>Reputation</button>
           )}
           {user?.role === 'responder' && (
             <button style={TAB('performance')} onClick={() => setActiveTab('performance')}>Performance</button>
           )}
-          <button style={TAB('security')} onClick={() => { setActiveTab('security'); loadSessions(); }}>🔐 Security</button>
-          <button style={TAB('danger')} onClick={() => setActiveTab('danger')}>Account</button>
+          <button style={TAB('notifications')} onClick={() => setActiveTab('notifications')}>🔔 Notifications</button>
+          <button style={TAB('security')}      onClick={() => setActiveTab('security')}>🔐 Security</button>
+          <button style={TAB('danger')}        onClick={() => setActiveTab('danger')}>Account</button>
         </div>
+
+        <button className={activeTab==='notifications'?'tab-active':'tab'} onClick={()=>setActiveTab('notifications')}>
+  🔔 Notifications
+</button>
+
+{/* Login History */}
+<div className="card">
+  <div className="section-label" style={{ marginBottom:'1rem' }}>Login History (last 20)</div>
+  <LoginHistoryList />
+</div>
 
         {/* ── Tab: Profile Info ─────────────────────────────────── */}
         {activeTab === 'profile' && (
@@ -663,9 +727,171 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {/* ── Tab: Notifications ────────────────────────────────── */}
+        {activeTab === 'notifications' && (
+          <div className="card">
+            <div className="section-label" style={{ marginBottom:'1rem' }}>Email Notifications</div>
+            <p style={{ fontSize:'0.82rem', color:'var(--text-muted)', marginBottom:'1.25rem', lineHeight:1.6 }}>
+              Choose which updates you receive by email when your reports change status.
+            </p>
+            {[
+              { key:'emailOnVerified',   label:'When my report is verified'        },
+              { key:'emailOnDispatched', label:'When responders are dispatched'     },
+              { key:'emailOnResolved',   label:'When incident is resolved'          },
+              { key:'emailOnRejected',   label:'When my report is rejected'         },
+            ].map(({ key, label }) => (
+              <div
+                key={key}
+                style={{
+                  display:'flex', justifyContent:'space-between', alignItems:'center',
+                  padding:'0.65rem 0', borderBottom:'1px solid #111',
+                }}
+              >
+                <span style={{ fontSize:'0.85rem', color:'var(--text-primary)' }}>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs?.[key] ?? true}
+                  onChange={async e => {
+                    const updated = { ...notifPrefs, [key]: e.target.checked };
+                    setNotifPrefs(updated);
+                    try {
+                      await API.put('/profile/notification-prefs', updated);
+                      toast.success('Preferences saved.');
+                    } catch {
+                      toast.error('Failed to save.');
+                    }
+                  }}
+                  style={{ accentColor:'#f4820a', width:18, height:18 }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── Tab: Security ─────────────────────────────────────── */}
         {activeTab === 'security' && (
           <div>
+
+            {/* ── 2FA Panel ──────────────────────────────────────── */}
+            <div className="card" style={{ marginBottom:'1.25rem' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'0.5rem', marginBottom:'0.75rem' }}>
+                <div>
+                  <div className="section-label">Two-Factor Authentication</div>
+                  <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.2rem' }}>
+                    {twoFactorEnabled
+                      ? '2FA is enabled. A code is sent to your email each time you log in.'
+                      : 'Add an extra layer of security — a code will be sent to your email on each login.'}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize:'0.7rem', padding:'0.15rem 0.6rem', borderRadius:999, fontWeight:700,
+                  background: twoFactorEnabled ? 'rgba(34,197,94,0.12)' : 'rgba(100,100,100,0.12)',
+                  color: twoFactorEnabled ? '#22c55e' : '#555',
+                }}>
+                  {twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+
+              {twoFactorMsg && (
+                <div style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.2)', borderRadius:8, padding:'0.65rem 0.9rem', fontSize:'0.82rem', color:'#22c55e', marginBottom:'0.75rem' }}>
+                  {twoFactorMsg}
+                </div>
+              )}
+
+              {/* Enable flow */}
+              {!twoFactorEnabled && twoFactorStep === 'idle' && (
+                <button className="btn-primary" style={{ fontSize:'0.8rem' }}
+                  onClick={async () => {
+                    try {
+                      const { data } = await API.post('/auth/2fa/enable');
+                      setTwoFactorStep('confirm');
+                      toast.success(data.message);
+                    } catch (err) { toast.error(err.response?.data?.message || 'Failed to start 2FA setup.'); }
+                  }}
+                >
+                  Enable 2FA
+                </button>
+              )}
+
+              {!twoFactorEnabled && twoFactorStep === 'confirm' && (
+                <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', flexWrap:'wrap' }}>
+                  <input
+                    className="form-input"
+                    placeholder="Enter 6-digit code"
+                    value={twoFactorSetupCode}
+                    onChange={e => setTwoFactorSetupCode(e.target.value.replace(/\D/, '').slice(0, 6))}
+                    inputMode="numeric"
+                    style={{ flex:1, minWidth:140, marginBottom:0, fontFamily:'monospace', letterSpacing:'0.3em', textAlign:'center' }}
+                  />
+                  <button className="btn-primary" style={{ fontSize:'0.8rem' }}
+                    onClick={async () => {
+                      try {
+                        const { data } = await API.post('/auth/2fa/confirm', { code: twoFactorSetupCode });
+                        setTwoFactorEnabled(true);
+                        setTwoFactorStep('idle');
+                        setTwoFactorSetupCode('');
+                        setTwoFactorMsg(data.message);
+                      } catch (err) { toast.error(err.response?.data?.message || 'Invalid code.'); }
+                    }}
+                  >
+                    Confirm
+                  </button>
+                  <button className="btn-secondary" style={{ fontSize:'0.8rem' }}
+                    onClick={() => { setTwoFactorStep('idle'); setTwoFactorSetupCode(''); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Disable flow */}
+              {twoFactorEnabled && twoFactorStep === 'idle' && (
+                <button className="btn-danger" style={{ fontSize:'0.8rem' }}
+                  onClick={async () => {
+                    try {
+                      await API.post('/auth/2fa/enable'); // reuse enable to send a code
+                      setTwoFactorStep('disable');
+                      toast.success('A code has been sent to your email to confirm disabling 2FA.');
+                    } catch (err) { toast.error('Failed to send code.'); }
+                  }}
+                >
+                  Disable 2FA
+                </button>
+              )}
+
+              {twoFactorEnabled && twoFactorStep === 'disable' && (
+                <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', flexWrap:'wrap' }}>
+                  <input
+                    className="form-input"
+                    placeholder="Enter code to confirm"
+                    value={twoFactorSetupCode}
+                    onChange={e => setTwoFactorSetupCode(e.target.value.replace(/\D/, '').slice(0, 6))}
+                    inputMode="numeric"
+                    style={{ flex:1, minWidth:140, marginBottom:0, fontFamily:'monospace', letterSpacing:'0.3em', textAlign:'center' }}
+                  />
+                  <button className="btn-danger" style={{ fontSize:'0.8rem' }}
+                    onClick={async () => {
+                      try {
+                        const { data } = await API.post('/auth/2fa/disable', { code: twoFactorSetupCode });
+                        setTwoFactorEnabled(false);
+                        setTwoFactorStep('idle');
+                        setTwoFactorSetupCode('');
+                        setTwoFactorMsg(data.message);
+                      } catch (err) { toast.error(err.response?.data?.message || 'Invalid code.'); }
+                    }}
+                  >
+                    Confirm Disable
+                  </button>
+                  <button className="btn-secondary" style={{ fontSize:'0.8rem' }}
+                    onClick={() => { setTwoFactorStep('idle'); setTwoFactorSetupCode(''); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Active Sessions Card ────────────────────────────── */}
             <div className="card" style={{ marginBottom:'1.25rem' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
                 <div className="section-label">Active Sessions</div>
@@ -749,13 +975,6 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {/* 2FA placeholder — coming after core features */}
-            <div className="card" style={{ opacity:0.5 }}>
-              <div className="section-label" style={{ marginBottom:'0.4rem' }}>Two-Factor Authentication</div>
-              <div style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>
-                2FA via authenticator app — coming soon.
-              </div>
-            </div>
           </div>
         )}
 

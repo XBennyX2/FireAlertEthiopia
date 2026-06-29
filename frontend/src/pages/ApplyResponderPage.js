@@ -43,6 +43,10 @@ export default function ApplyResponderPage() {
   const [error,       setError]     = useState('');
   const [success,     setSuccess]   = useState(false);
 
+  // Document Upload States
+  const [idDocument,            setIdDocument]            = useState(null);
+  const [certificationDocument, setCertificationDocument] = useState(null); 
+
   // Already a responder? bounce them out
   useEffect(() => {
     if (user?.role === 'responder') {
@@ -68,23 +72,29 @@ export default function ApplyResponderPage() {
     e.preventDefault();
     setError('');
 
-    if (!phone.trim())             return setError('Phone number is required.');
-    if (yearsExperience === '')    return setError('Years of experience is required.');
+    if (!phone.trim())              return setError('Phone number is required.');
+    if (yearsExperience === '')     return setError('Years of experience is required.');
     if (Number(yearsExperience) < 0) return setError('Years of experience cannot be negative.');
-    if (!preferredStation)         return setError('Please select a preferred station.');
-    if (!availability)             return setError('Please select your availability.');
-    if (!motivation.trim())        return setError('Please tell us why you want to become a responder.');
+    if (!preferredStation)          return setError('Please select a preferred station.');
+    if (!availability)              return setError('Please select your availability.');
+    if (!motivation.trim())         return setError('Please tell us why you want to become a responder.');
 
     setSubmitting(true);
     try {
-      await API.post('/admin/applications', {
-        phone,
-        yearsExperience: Number(yearsExperience),
-        previousTraining,
-        currentOccupation,
-        preferredStation,
-        availability,
-        motivation,
+      const formData = new FormData();
+      formData.append('phone',            phone);
+      formData.append('yearsExperience',  Number(yearsExperience));
+      formData.append('previousTraining', previousTraining);
+      formData.append('currentOccupation',currentOccupation);
+      formData.append('preferredStation', preferredStation);
+      formData.append('availability',     availability);
+      formData.append('motivation',       motivation);
+      
+      if (idDocument)            formData.append('idDocument',            idDocument);
+      if (certificationDocument) formData.append('certificationDocument', certificationDocument);
+
+      await API.post('/admin/applications', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       setSuccess(true);
     } catch (err) {
@@ -204,6 +214,39 @@ export default function ApplyResponderPage() {
             <div className="form-group">
               <label className="form-label">Previous Training / Certifications (optional)</label>
               <textarea className="form-textarea" placeholder="First aid certification, firefighting course, military service, etc." value={previousTraining} onChange={e => setPreviousTraining(e.target.value)} rows={3} />
+            </div>
+
+            {/* Document Uploads */}
+            <div style={{ background:'rgba(244,130,10,0.06)', border:'1px solid rgba(244,130,10,0.12)', borderRadius:8, padding:'1rem', marginBottom:'1rem' }}>
+              <div style={{ fontSize:'0.82rem', fontWeight:600, color:'#f0ede8', marginBottom:'0.75rem' }}>
+                Supporting Documents
+                <span style={{ fontSize:'0.72rem', color:'#555', fontWeight:400, marginLeft:'0.5rem' }}>(optional but recommended)</span>
+              </div>
+              <div className="two-col">
+                <div className="form-group">
+                  <label className="form-label">National ID / Kebele ID</label>
+                  <input
+                    type="file"
+                    className="form-input"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={e => setIdDocument(e.target.files[0] || null)}
+                    style={{ padding:'0.4rem' }}
+                  />
+                  {idDocument && <span style={{ fontSize:'0.72rem', color:'#22c55e' }}>✓ {idDocument.name}</span>}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Training Certification</label>
+                  <input
+                    type="file"
+                    className="form-input"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={e => setCertificationDocument(e.target.files[0] || null)}
+                    style={{ padding:'0.4rem' }}
+                  />
+                  {certificationDocument && <span style={{ fontSize:'0.72rem', color:'#22c55e' }}>✓ {certificationDocument.name}</span>}
+                </div>
+              </div>
+              <div style={{ fontSize:'0.72rem', color:'#555' }}>PDF or image, max 10MB each.</div>
             </div>
 
             <div className="two-col">

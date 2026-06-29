@@ -451,3 +451,25 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
+@media print {
+  .dash-topbar,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  nav {
+    display: none !important;
+  }
+  .dash-page {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .card, .card-sm {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    break-inside: avoid;
+  }
+  .dash-content {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

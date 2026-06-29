@@ -2,6 +2,7 @@ const Incident = require('../models/Incident');
 const User     = require('../models/User');
 const axios    = require('axios');
 const { updateReputationScore } = require('../utils/reputationManager');
+const { sendStatusUpdateEmail } = require('../utils/emailService');
 
 // ── Helper: emit socket event to reporter ─────────────────────────
 function notifyReporter(req, incident, eventType, message) {
@@ -64,6 +65,18 @@ const verifyIncident = async (req, res) => {
       });
     }
 
+    // Email Notification with user preference guard
+    const prefs = incident.reportedBy?.notificationPrefs;
+    if (prefs?.emailOnVerified !== false && incident.reportedBy?.email) {
+      sendStatusUpdateEmail(
+        incident.reportedBy.email,
+        incident.reportedBy.name,
+        'verified',
+        incident.fire_type,
+        incident._id,
+      ).catch(err => console.error('Status email error:', err.message));
+    }
+
     await updateReporterReputation(incident.reportedBy, 'verified');
 
     res.json({ message: 'Incident verified', incident });
@@ -97,6 +110,18 @@ const dispatchIncident = async (req, res) => {
       });
     }
 
+    // Email Notification with user preference guard
+    const prefs = incident.reportedBy?.notificationPrefs;
+    if (prefs?.emailOnDispatched !== false && incident.reportedBy?.email) {
+      sendStatusUpdateEmail(
+        incident.reportedBy.email,
+        incident.reportedBy.name,
+        'dispatched',
+        incident.fire_type,
+        incident._id,
+      ).catch(err => console.error('Status email error:', err.message));
+    }
+
     res.json({ message: 'Responders dispatched', incident });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -127,6 +152,18 @@ const resolveIncident = async (req, res) => {
         message:    'Your reported incident has been resolved.',
         incidentId: incident._id.toString(),
       });
+    }
+
+    // Email Notification with user preference guard
+    const prefs = incident.reportedBy?.notificationPrefs;
+    if (prefs?.emailOnResolved !== false && incident.reportedBy?.email) {
+      sendStatusUpdateEmail(
+        incident.reportedBy.email,
+        incident.reportedBy.name,
+        'resolved',
+        incident.fire_type,
+        incident._id,
+      ).catch(err => console.error('Status email error:', err.message));
     }
 
     const result = await updateReputationScore(incident.reportedBy, 'verified');
@@ -165,6 +202,18 @@ const rejectIncident = async (req, res) => {
         message:    'Your incident report was reviewed and could not be verified.',
         incidentId: incident._id.toString(),
       });
+    }
+
+    // Email Notification with user preference guard
+    const prefs = incident.reportedBy?.notificationPrefs;
+    if (prefs?.emailOnRejected !== false && incident.reportedBy?.email) {
+      sendStatusUpdateEmail(
+        incident.reportedBy.email,
+        incident.reportedBy.name,
+        'rejected',
+        incident.fire_type,
+        incident._id,
+      ).catch(err => console.error('Status email error:', err.message));
     }
 
     const result = await updateReputationScore(incident.reportedBy, 'false_report');

@@ -22,10 +22,12 @@ export default function ReportForm() {
   // ── Form fields ───────────────────────────────────────────────────
   const [description, setDescription] = useState('');
   const [fireType, setFireType] = useState('');
+  const [severity, setSeverity] = useState('Medium'); // Added missing severity state
   const [location, setLocation] = useState({ lat: null, lng: null, address: '' });
   const [isAnonymous, setIsAnonymous] = useState(false);
+  
   // ── Multi-file state (max 5) ──────────────────────────────────────
-  const [mediaFiles, setMediaFiles] = useState([]);       // [{ file, previewUrl, isLive }]
+  const [mediaFiles, setMediaFiles] = useState([]); // [{ file, previewUrl, isLive }]
   const MAX_FILES = 5;
 
   // ── UI state ──────────────────────────────────────────────────────
@@ -146,7 +148,8 @@ export default function ReportForm() {
     const gpsValidation = getGPSValidation();
     const reportPayload = {
       description,
-      fire_type:      fireType,
+      fire_type:       fireType,
+      severity,        // Included severity in payload
       lat:             location.lat,
       lng:             location.lng,
       address:         location.address || '',
@@ -175,6 +178,7 @@ export default function ReportForm() {
       const formData = new FormData();
       Object.entries(reportPayload).forEach(([key, value]) => formData.append(key, value));
       mediaFiles.forEach(({ file }) => formData.append('media', file));
+      formData.append('severity', severity);
 
       await API.post('/incidents', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -301,6 +305,20 @@ export default function ReportForm() {
                 {fireTypeOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
+              </select>
+            </div>
+            
+            {/* ── Severity ─────────────────────────────────── */}
+            <div className="form-group">
+              <label className="form-label">Estimated Severity</label>
+              <select
+                className="form-select"
+                value={severity}
+                onChange={e => setSeverity(e.target.value)}
+              >
+                <option value="Low">Low — small, contained, no immediate danger</option>
+                <option value="Medium">Medium — spreading, risk to property</option>
+                <option value="High">High — large fire, people in danger</option>
               </select>
             </div>
 
