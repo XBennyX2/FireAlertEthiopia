@@ -29,6 +29,12 @@ const forumPostSchema = new mongoose.Schema({
   views:        { type: Number,  default: 0 },
   createdAt:    { type: Date,    default: Date.now },
   editedAt:     { type: Date },
+  reports: [{
+  reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reason:     { type: String },
+  reportedAt: { type: Date, default: Date.now },
+  imageUrl: { type: String, default: '' },
+}],
 });
 
 module.exports = mongoose.model('ForumPost', forumPostSchema);

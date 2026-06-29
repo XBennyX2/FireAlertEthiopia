@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import NotificationBell from '../components/NotificationBell';
 import API from '../api/axios';
+import { renderMarkdown } from '../utils/markdown';
 import '../dashboard.css';
 
 const CATEGORIES = [
@@ -180,6 +181,7 @@ export default function ForumPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Content</label>
+                <div style={{ fontSize:'0.72rem', color:'#555', marginBottom:'0.3rem' }}>  Supports **bold**, *italic*, [links](url), `code`, and bullet lists with -</div>
                 <textarea
                   className="form-textarea"
                   placeholder="Share your thoughts, tips, or questions…"
@@ -269,7 +271,7 @@ export default function ForumPage() {
               onMouseOver={e  => e.currentTarget.style.borderColor = 'var(--border-2)'}
               onMouseOut={e   => e.currentTarget.style.borderColor = 'var(--border)'}
             >
-              <div style={{ display:'flex', justifycontent:'space-between', alignItems:'flex-start', gap:'0.75rem' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.75rem' }}>
                 <div style={{ flex:1, minWidth:0 }}>
 
                   {/* Top row: category + verified + pinned */}
@@ -300,8 +302,8 @@ export default function ForumPage() {
                   </div>
 
                   {/* Preview */}
-                  <div style={{ fontSize:'0.8rem', color:'var(--text-muted)', lineHeight:1.55, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', marginBottom:'0.6rem' }}>
-                    {post.content}
+                  <div style={{ overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', marginBottom:'0.6rem' }}>
+                    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(post.content) }} style={{ lineHeight:1.7, fontSize:'0.875rem', color:'var(--text-muted)' }}/>
                   </div>
 
                   {/* Footer */}

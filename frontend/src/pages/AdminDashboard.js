@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import IncidentMap from '../components/IncidentMap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +7,6 @@ import '../dashboard.css';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useToast } from '../context/ToastContext';
-import { useRef } from 'react';
 import SkeletonCard from '../components/SkeletonCard';
 import AdminIncidentMap from '../components/AdminIncidentMap';
 
@@ -22,7 +21,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'health' | 'safety' | 'appeals'
+  const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'health' | 'safety' | 'appeals' | 'forum'
 
   const [users,    setUsers]    = useState([]);
   const [apps,     setApps]     = useState([]);
@@ -51,8 +50,9 @@ export default function AdminDashboard() {
   // Health state
   const [health, setHealth] = useState(null);
 
-  // Appeals state
+  // Appeals & Forum state
   const [appeals, setAppeals] = useState([]);
+  const [flaggedPosts, setFlaggedPosts] = useState([]);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -293,6 +293,13 @@ export default function AdminDashboard() {
     API.get('/admin/appeals').then(({ data }) => setAppeals(data)).catch(() => {});
   }, [tab]);
 
+  useEffect(() => {
+    if (tab !== 'forum') return;
+    API.get('/forum?flagged=true')
+      .then(({ data }) => setFlaggedPosts(data.posts || []))
+      .catch(() => {});
+  }, [tab]);
+
   async function handleApproveContent(id) {
     try {
       await API.put(`/safety/${id}/approve`);
@@ -420,7 +427,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────────── */}
-        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1.5rem' }}>
+        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1.5rem', flexWrap:'wrap' }}>
           <button style={TAB_STYLE('users')} onClick={() => setTab('users')}>
             {t.users}
           </button>
@@ -456,6 +463,13 @@ export default function AdminDashboard() {
           </button>
           <button style={TAB_STYLE('health')} onClick={() => setTab('health')}>
             System Health
+          </button>
+          <button style={TAB_STYLE('forum')} onClick={() => setTab('forum')}>
+            Forum {flaggedPosts.length > 0 && (
+              <span style={{ marginLeft:4, background:'#e63c2f', color:'#fff', borderRadius:999, fontSize:'0.65rem', padding:'1px 6px' }}>
+                {flaggedPosts.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -760,8 +774,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        
-
         {/* ── Audit Logs Tab ───────────────────────────────────── */}
         {!loading && tab === 'audit' && (
           <div>
@@ -1042,6 +1054,51 @@ export default function AdminDashboard() {
                   <strong style={{ color:'var(--text-primary)', fontSize:'0.75rem' }}>Appeal reason:</strong><br />
                   {a.reason}
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Forum Tab ────────────────────────────────────────────── */}
+        {!loading && tab === 'forum' && (
+          <div>
+            <div className="section-label" style={{ marginBottom:'1rem' }}>Flagged Posts</div>
+            {flaggedPosts.length === 0 && (
+              <div className="empty-state"><div className="empty-state-icon">✅</div><div>No flagged forum posts.</div></div>
+            )}
+            {flaggedPosts.map(post => (
+              <div key={post._id} className="card" style={{ marginBottom:'0.75rem' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.75rem', marginBottom:'0.75rem' }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:'0.9rem', marginBottom:'0.2rem' }}>{post.title}</div>
+                    <div style={{ fontSize:'0.75rem', color:'#666' }}>
+                      By {post.author?.name} · {post.reports?.length || 0} report{post.reports?.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', gap:'0.5rem' }}>
+                    <button className="btn-secondary" style={{ fontSize:'0.75rem' }}
+                      onClick={async () => {
+                        await API.put(`/forum/${post._id}/unflag`);
+                        setFlaggedPosts(prev => prev.filter(p => p._id !== post._id));
+                        toast.success('Post cleared.');
+                      }}>✔ Clear</button>
+                    <button className="btn-danger" style={{ fontSize:'0.75rem' }}
+                      onClick={async () => {
+                        if (!window.confirm('Delete this post permanently?')) return;
+                        await API.delete(`/forum/${post._id}`);
+                        setFlaggedPosts(prev => prev.filter(p => p._id !== post._id));
+                        toast.success('Post deleted.');
+                      }}>🗑 Delete</button>
+                  </div>
+                </div>
+                <div style={{ fontSize:'0.8rem', color:'#666', lineHeight:1.6 }}>
+                  {post.content?.substring(0, 200)}…
+                </div>
+                {post.reports?.length > 0 && (
+                  <div style={{ marginTop:'0.6rem', fontSize:'0.75rem', color:'#f87c74' }}>
+                    Reports: {post.reports.map(r => r.reason).join(' · ')}
+                  </div>
+                )}
               </div>
             ))}
           </div>

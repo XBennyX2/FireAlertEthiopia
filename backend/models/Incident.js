@@ -53,13 +53,14 @@ resolvedAt:      { type: Date },
   reportedAt:  { type: Date, default: Date.now },
   resolvedAt:  { type: Date },
   isAnonymous: { type: Boolean, default: false },
-  
+
   infoRequests: [{
   message:    { type: String },
   requestedBy:{ type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   requestedAt:{ type: Date, default: Date.now },
   response:   { type: String, default: '' },
   respondedAt:{ type: Date },
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }],
 });
 

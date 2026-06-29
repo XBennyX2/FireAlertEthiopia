@@ -23,6 +23,16 @@ const safetyContentSchema = new mongoose.Schema({
   imageUrl:        { type: String },
   createdAt:       { type: Date, default: Date.now },
   updatedAt:       { type: Date, default: Date.now },
+  viewCount: { type: Number, default: 0 },
+  scheduledFor: { type: Date }, // if set, auto-publish at this tim
 });
+
+// PUT /api/safety/:id/view — increment view count (public)
+const recordView = async (req, res) => {
+  try {
+    await SafetyContent.findByIdAndUpdate(req.params.id, { $inc: { viewCount: 1 } });
+    res.json({ ok: true });
+  } catch { res.json({ ok: false }); }
+};
 
 module.exports = mongoose.model('SafetyContent', safetyContentSchema);

@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema({
   emailOnResolved:   { type: Boolean, default: true },
   emailOnRejected:   { type: Boolean, default: true },
   pushEnabled:       { type: Boolean, default: true },
+  shiftSchedule: [{
+  day:       { type: String, enum: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
+  startTime: { type: String }, // "08:00"
+  endTime:   { type: String }, // "16:00"
+}],
 }
 });
 

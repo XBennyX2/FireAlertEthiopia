@@ -1,8 +1,38 @@
 const SafetyContent = require('../models/SafetyContent');
 const AuditLog      = require('../models/AuditLog');
+const multer        = require('multer');
+const path          = require('path');
+const fs            = require('fs');
 
+// Configure Multer Storage
+const safetyStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/safety';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `safety-${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
+
+// Configure Multer Upload Middleware
+const safetyUpload = multer({
+  storage: safetyStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) 
+      ? cb(null, true) 
+      : cb(new Error('Images only.'));
+  },
+}).single('image');
+
+// Audit Logger Helper
 async function log(adminId, action, details) {
-  try { await AuditLog.create({ performedBy: adminId, action, details }); } catch {}
+  try { 
+    await AuditLog.create({ performedBy: adminId, action, details }); 
+  } catch {}
 }
 
 // GET /api/safety — public, returns all approved content
@@ -46,62 +76,76 @@ const getMyContent = async (req, res) => {
   }
 };
 
-// POST /api/safety — responder or admin creates content
-const createContent = async (req, res) => {
-  try {
-    const { title, body, category, language } = req.body;
+// POST /api/safety — responder or admin creates content with image upload
+const createContent = (req, res) => {
+  safetyUpload(req, res, async (err) => {
+    if (err) return res.status(400).json({ message: err.message });
+    
+    try {
+      const { title, body, category, language } = req.body;
+      if (!title?.trim() || !body?.trim() || !category) {
+        return res.status(400).json({ message: 'Title, body, and category are required.' });
+      }
 
-    if (!title?.trim() || !body?.trim() || !category) {
-      return res.status(400).json({ message: 'Title, body, and category are required.' });
+      const content = await SafetyContent.create({
+        title:      title.trim(),
+        body:       body.trim(),
+        category,
+        language:   language || 'en',
+        author:     req.user._id,
+        imageUrl:   req.file ? req.file.path.replace(/\\/g, '/') : '',
+        status:     req.user.role === 'admin' ? 'approved' : 'pending_review',
+        publishedAt:req.user.role === 'admin' ? new Date() : undefined,
+      });
+
+      if (req.user.role !== 'admin') {
+        await log(req.user._id, 'SAFETY_CONTENT_SUBMITTED', `${req.user.name} submitted safety content: "${title}"`);
+      }
+
+      res.status(201).json({ message: 'Content submitted for review.', content });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
-
-    const content = await SafetyContent.create({
-      title:    title.trim(),
-      body:     body.trim(),
-      category,
-      language: language || 'en',
-      author:   req.user._id,
-      status:   req.user.role === 'admin' ? 'approved' : 'pending_review',
-      publishedAt: req.user.role === 'admin' ? new Date() : undefined,
-    });
-
-    if (req.user.role !== 'admin') {
-      await log(req.user._id, 'SAFETY_CONTENT_SUBMITTED', `${req.user.name} submitted safety content: "${title}"`);
-    }
-
-    res.status(201).json({ message: 'Content submitted for review.', content });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  });
 };
 
-// PUT /api/safety/:id — author edits their own draft/pending content
-const updateContent = async (req, res) => {
-  try {
-    const content = await SafetyContent.findById(req.params.id);
-    if (!content) return res.status(404).json({ message: 'Content not found.' });
+// PUT /api/safety/:id — author edits their own draft/pending content with image upload support
+const updateContent = (req, res) => {
+  safetyUpload(req, res, async (err) => {
+    if (err) return res.status(400).json({ message: err.message });
 
-    const isAuthor = content.author.toString() === req.user._id.toString();
-    const isAdmin  = req.user.role === 'admin';
+    try {
+      const content = await SafetyContent.findById(req.params.id);
+      if (!content) return res.status(404).json({ message: 'Content not found.' });
 
-    if (!isAuthor && !isAdmin) return res.status(403).json({ message: 'Access denied.' });
-    if (!isAdmin && content.status === 'approved') {
-      return res.status(400).json({ message: 'Approved content cannot be edited.' });
+      const isAuthor = content.author.toString() === req.user._id.toString();
+      const isAdmin  = req.user.role === 'admin';
+
+      if (!isAuthor && !isAdmin) return res.status(403).json({ message: 'Access denied.' });
+      if (!isAdmin && content.status === 'approved') {
+        return res.status(400).json({ message: 'Approved content cannot be edited.' });
+      }
+
+      const { title, body, category, language } = req.body;
+      if (title)    content.title    = title.trim();
+      if (body)     content.body     = body.trim();
+      if (category) content.category = category;
+      if (language) content.language = language;
+      
+      // If a new file is uploaded, update the path
+      if (req.file) {
+        content.imageUrl = req.file.path.replace(/\\/g, '/');
+      }
+
+      content.updatedAt = new Date();
+      if (!isAdmin) content.status = 'pending_review';
+
+      await content.save();
+      res.json({ message: 'Content updated.', content });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
-
-    const { title, body, category, language } = req.body;
-    if (title)    content.title    = title.trim();
-    if (body)     content.body     = body.trim();
-    if (category) content.category = category;
-    if (language) content.language = language;
-    content.updatedAt = new Date();
-    if (!isAdmin) content.status = 'pending_review';
-
-    await content.save();
-    res.json({ message: 'Content updated.', content });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  });
 };
 
 // PUT /api/safety/:id/approve — admin approves
@@ -182,7 +226,13 @@ const deleteContent = async (req, res) => {
 };
 
 module.exports = {
-  getPublicContent, getPendingContent, getMyContent,
-  createContent, updateContent, approveContent,
-  rejectContent, togglePin, deleteContent,
+  getPublicContent, 
+  getPendingContent, 
+  getMyContent,
+  createContent, 
+  updateContent, 
+  approveContent,
+  rejectContent, 
+  togglePin, 
+  deleteContent,
 };

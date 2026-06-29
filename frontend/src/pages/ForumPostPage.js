@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import NotificationBell from '../components/NotificationBell';
 import API from '../api/axios';
+import { renderMarkdown } from '../utils/markdown';
 import '../dashboard.css';
 
 function fmtDate(iso) {
@@ -158,17 +159,6 @@ export default function ForumPostPage() {
     }
   }
 
-  async function handleFlagPost() {
-    const reason = window.prompt('Reason for flagging this post (optional):');
-    if (reason === null) return; // user cancelled
-    try {
-      await API.post(`/forum/${id}/flag`, { reason });
-      toast.success('Post flagged for moderation review.');
-    } catch {
-      toast.error('Failed to flag post.');
-    }
-  }
-
   async function handleVerifyPost() {
     try {
       const { data } = await API.put(`/forum/${id}/verify`);
@@ -242,6 +232,7 @@ export default function ForumPostPage() {
                 onChange={e => setEditTitle(e.target.value)}
                 style={{ marginBottom:'0.75rem', fontFamily:"'Syne',sans-serif", fontWeight:700 }}
               />
+              <div style={{ fontSize:'0.72rem', color:'#555', marginBottom:'0.3rem' }}>  Supports **bold**, *italic*, [links](url), `code`, and bullet lists with -</div>
               <textarea
                 className="form-textarea"
                 value={editContent}
@@ -261,9 +252,7 @@ export default function ForumPostPage() {
               <h1 style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:'1.375rem', letterSpacing:'-0.02em', color:'var(--text-primary)', margin:'0 0 1rem', lineHeight:1.3 }}>
                 {post.title}
               </h1>
-              <p style={{ fontSize:'0.9rem', color:'var(--text-primary)', lineHeight:1.7, margin:'0 0 1rem', whiteSpace:'pre-wrap' }}>
-                {post.content}
-              </p>
+              <div dangerouslySetInnerHTML={{ __html: renderMarkdown(post.content) }} style={{ lineHeight:1.7, fontSize:'0.875rem', color:'var(--text-muted)', marginBottom:'1rem' }}/>
             </>
           )}
 
@@ -331,9 +320,7 @@ export default function ForumPostPage() {
 
               {/* Flag — non-authors */}
               {!isAuthor && (
-                <button className="btn-secondary" style={{ fontSize:'0.78rem' }} onClick={handleFlagPost}>
-                  🚩 Report
-                </button>
+                <button  className="btn-secondary"  style={{ fontSize:'0.72rem', color:'#e63c2f' }}  onClick={async () => {    const reason = window.prompt('Why are you reporting this post?');    if (reason === null) return;    try {      await API.post(`/forum/${post._id}/report`, { reason });      toast.success('Post reported to admins.');    } catch (err) {      toast.error(err.response?.data?.message || 'Failed to report.');    }  }}>  🚩 Report</button>
               )}
 
               {/* Verify — mods only */}

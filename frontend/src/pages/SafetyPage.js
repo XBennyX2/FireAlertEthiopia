@@ -59,6 +59,13 @@ export default function SafetyPage() {
   const unpinned = filtered.filter(c => !c.isPinned);
   const displayed = [...pinned, ...unpinned];
 
+  useEffect(() => {
+  // Record views for displayed items
+  displayed.forEach(item => {
+    API.put(`/safety/${item._id}/view`).catch(() => {});
+  });
+}, [displayed.length]);
+
   return (
     <div className="dash-page">
 
@@ -84,8 +91,8 @@ export default function SafetyPage() {
           )}
 
           <Link to="/feed" className="btn-secondary" style={{ fontSize:'0.78rem' }}>
-  🔥 Live Incident Feed
-</Link>
+            🔥 Live Incident Feed
+          </Link>
         </div>
       </nav>
 
@@ -185,6 +192,17 @@ export default function SafetyPage() {
                 }}>
                   {CATEGORY_LABELS[item.category] || item.category}
                 </div>
+
+                {/* ── Optional Dynamic Cover Image ──────────────────── */}
+                {item.imageUrl && (
+                  <img
+                    src={`http://localhost:5000/${item.imageUrl}`}
+                    alt={item.title}
+                    style={{ width:'100%', borderRadius:8, marginBottom:'0.75rem', objectFit:'cover', maxHeight:200 }}
+                    onError={e => e.target.style.display='none'}
+                  />
+                )}
+
                 <div style={{
                   fontWeight:600, fontSize:'0.9rem',
                   color:'var(--text-primary)', marginBottom:'0.5rem',

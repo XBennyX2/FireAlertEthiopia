@@ -17,5 +17,7 @@ router.put('/:id/approve',        protect, authorize('admin'), approveContent);
 router.put('/:id/reject',         protect, authorize('admin'), rejectContent);
 router.put('/:id/pin',            protect, authorize('admin'), togglePin);
 router.delete('/:id',             protect, authorize('responder','admin'), deleteContent);
+router.put('/:id/view', recordView);
+
 
 module.exports = router;

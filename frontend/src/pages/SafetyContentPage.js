@@ -176,6 +176,7 @@ export default function SafetyContentPage() {
         <div className="section-label">My Submissions</div>
 
         {loading && <div className="loading-state">Loading…</div>}
+        
 
         {!loading && myContent.length === 0 && (
           <div className="empty-state">
@@ -199,10 +200,13 @@ export default function SafetyContentPage() {
                 }}>
                   {item.status.replace('_', ' ')}
                 </span>
+
+                <span style={{ fontSize:'0.68rem', color:'#444' }}>👁 {item.viewCount || 0} views</span>
                 {item.rejectionReason && (
                   <div style={{ fontSize:'0.75rem', color:'#f87c74', marginTop:'0.4rem' }}>
                     Rejection reason: {item.rejectionReason}
                   </div>
+                  
                 )}
               </div>
               <div style={{ display:'flex', gap:'0.4rem', flexShrink:0 }}>

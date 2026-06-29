@@ -29,28 +29,26 @@ const upload = multer({
 const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 // ── GET /api/forum — get all posts ───────────────────────────────
-const getPosts = async (req, res) => {
+const getAllPosts = async (req, res) => {
   try {
-    const { category, search, page = 1, limit = 20 } = req.query;
+    const { category, search, page = 1, limit = 20, flagged } = req.query;
     const query = { isRemoved: false };
 
     if (category) query.category = category;
-    if (search)   query.$or = [
+    if (flagged === 'true') query.isFlagged = true;
+    if (search) query.$or = [
       { title:   { $regex: search, $options: 'i' } },
       { content: { $regex: search, $options: 'i' } },
     ];
 
     const total = await ForumPost.countDocuments(query);
     const posts = await ForumPost.find(query)
+      .populate('author', 'name role profilePhoto reputationScore')
       .sort({ isPinned: -1, createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .select('-replies')
-      .populate('author', 'name role profilePhoto reputationScore')
-      .populate('replies.author', 'name role profilePhoto reputationScore');
+      .limit(parseInt(limit));
 
-    res.json({ posts, total, page: parseInt(page), pages: Math.ceil(total / limit) });
-
+    res.json({ posts, total, pages: Math.ceil(total / limit) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -80,6 +78,7 @@ const getPost = async (req, res) => {
 };
 
 // ── POST /api/forum — create post ────────────────────────────────
+// ── POST /api/forum — create post ────────────────────────────────
 const createPost = (req, res) => {
   upload(req, res, async (err) => {
     if (err) return res.status(400).json({ message: err.message });
@@ -94,12 +93,15 @@ const createPost = (req, res) => {
     }
 
     try {
+      // Normalize path for web usage (handling Windows backslashes if necessary)
+      const imagePath = req.file ? req.file.path.replace(/\\/g, '/') : '';
+
       const post = await ForumPost.create({
         author:   req.user._id,
         title:    title.trim(),
         content:  content.trim(),
         category: category || 'general',
-        image:    req.file ? `http://localhost:5000/${req.file.path}` : '',
+        imageUrl: imagePath, // Ensure this matches your Schema field name
       });
 
       const populated = await ForumPost.findById(post._id)
@@ -111,7 +113,6 @@ const createPost = (req, res) => {
     }
   });
 };
-
 // ── PUT /api/forum/:id — edit post ───────────────────────────────
 const editPost = async (req, res) => {
   const { title, content } = req.body;
@@ -141,29 +142,24 @@ const editPost = async (req, res) => {
   }
 };
 
-// ── DELETE /api/forum/:id — delete own post ───────────────────────
-const deletePost = async (req, res) => {
-  try {
-    const post = await ForumPost.findById(req.params.id);
-    if (!post) return res.status(404).json({ message: 'Post not found' });
+// // ── DELETE /api/forum/:id — delete own post ───────────────────────
+// const deletePost = async (req, res) => {
+//   try {
+//     const post = await ForumPost.findById(req.params.id);
+//     if (!post) return res.status(404).json({ message: 'Post not found.' });
 
-    const isAuthor = post.author.toString() === req.user._id.toString();
-    const isAdmin  = ['admin', 'responder'].includes(req.user.role);
+//     const isAuthor = post.author.toString() === req.user._id.toString();
+//     const isAdmin  = req.user.role === 'admin';
 
-    if (!isAuthor && !isAdmin) {
-      return res.status(403).json({ message: 'You cannot delete this post' });
-    }
+//     if (!isAuthor && !isAdmin) return res.status(403).json({ message: 'Access denied.' });
 
-    post.isRemoved = true;
-    await post.save();
+//     await ForumPost.findByIdAndDelete(req.params.id);
+//     res.json({ message: 'Post deleted.' });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
-    res.json({ message: 'Post removed' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ── POST /api/forum/:id/like — toggle like on post ───────────────
 // ── POST /api/forum/:id/like — toggle like on post ───────────────
 const likePost = async (req, res) => {
   try {
@@ -316,8 +312,93 @@ const verifyPost = async (req, res) => {
   }
 };
 
+const reportPost = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const post = await ForumPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: 'Post not found.' });
+
+    const alreadyReported = post.reports?.some(r => r.reportedBy.toString() === req.user._id.toString());
+    if (alreadyReported) return res.status(400).json({ message: 'You have already reported this post.' });
+
+    post.reports = post.reports || [];
+    post.reports.push({ reportedBy: req.user._id, reason: reason || 'No reason given' });
+    post.isFlagged = true;
+    await post.save();
+
+    res.json({ message: 'Post reported. An admin will review it.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const deletePost = async (req, res) => {
+  try {
+    const post = await ForumPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: 'Post not found.' });
+
+    const isAuthor = post.author.toString() === req.user._id.toString();
+    const isAdmin  = req.user.role === 'admin';
+    if (!isAuthor && !isAdmin) return res.status(403).json({ message: 'Access denied.' });
+
+    await ForumPost.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Post deleted.' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};
+
+const addReply = async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ message: 'Reply cannot be empty.' });
+
+    const post = await ForumPost.findById(req.params.id).populate('author','_id name');
+    if (!post) return res.status(404).json({ message: 'Post not found.' });
+
+    const reply = { author: req.user._id, content: content.trim(), createdAt: new Date() };
+    post.replies.push(reply);
+    await post.save();
+
+    const io = req.app.get('io');
+
+    // Notify post owner
+    if (post.author._id.toString() !== req.user._id.toString()) {
+      io?.to(post.author._id.toString()).emit('forumReply', {
+        message:    `${req.user.name} replied to your post: "${post.title}"`,
+        postId:     post._id.toString(),
+        incidentId: null,
+      });
+    }
+
+    // Detect @mentions — find usernames mentioned
+    const mentions = content.match(/@(\w+)/g) || [];
+    if (mentions.length > 0) {
+      const usernames = mentions.map(m => m.slice(1));
+      const mentionedUsers = await User.find({
+        name: { $in: usernames.map(n => new RegExp(`^${n}$`,'i')) },
+        _id:  { $ne: req.user._id },
+      });
+
+      mentionedUsers.forEach(u => {
+        io?.to(u._id.toString()).emit('forumReply', {
+          message:    `${req.user.name} mentioned you in a forum reply`,
+          postId:     post._id.toString(),
+          incidentId: null,
+        });
+      });
+    }
+
+    const populated = await ForumPost.findById(post._id)
+      .populate('author',         'name role profilePhoto reputationScore')
+      .populate('replies.author', 'name role profilePhoto reputationScore');
+
+    res.status(201).json(populated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
-  getPosts,
+  getAllPosts,
   getPost,
   createPost,
   editPost,
@@ -328,4 +409,5 @@ module.exports = {
   likeReply,
   flagPost,
   verifyPost,
+  reportPost,
 };

@@ -158,6 +158,25 @@ io.on('connection', (socket) => {
     console.log(`Socket disconnected: ${socket.id}`);
   });
 });
+const { publishScheduledContent } = require('./utils/scheduler');
+// Run every 5 minutes
+setInterval(publishScheduledContent, 5 * 60 * 1000);
+publishScheduledContent(); // run immediately on startup
+
+const { publishScheduledContent, sendWeeklySafetyDigest } = require('./utils/scheduler');
+
+// Run every 5 minutes for scheduled publishing
+setInterval(publishScheduledContent, 5 * 60 * 1000);
+
+// Run weekly digest every Sunday at 09:00
+const now  = new Date();
+const next = new Date();
+next.setDate(next.getDate() + ((7 - now.getDay()) % 7 || 7));
+next.setHours(9, 0, 0, 0);
+setTimeout(() => {
+  sendWeeklySafetyDigest();
+  setInterval(sendWeeklySafetyDigest, 7 * 24 * 60 * 60 * 1000);
+}, next - now);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

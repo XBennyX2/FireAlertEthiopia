@@ -16,6 +16,103 @@ function getDashboardLink(role) {
   return '/dashboard';
 }
 
+// ── Responder Performance Sub-component ──────────────────────────
+function ResponderPerformanceTab() {
+  const [stats,   setStats]   = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    API.get('/responder/my-performance')
+      .then(({ data }) => setStats(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="loading-state">Loading performance…</div>;
+  if (!stats)  return null;
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+
+      {/* Stats Grid */}
+      <div className="card">
+        <div className="section-label" style={{ marginBottom:'1rem' }}>My Performance</div>
+        <div className="stat-grid" style={{ marginBottom:'1rem' }}>
+          <div className="stat-card">
+            <div className="stat-label">Total Handled</div>
+            <div className="stat-value">{stats.totalHandled}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Resolved</div>
+            <div className="stat-value" style={{ color:'#22c55e' }}>{stats.resolved}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Avg Response</div>
+            <div className="stat-value">{stats.avgResponseMinutes} min</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Resolution Rate</div>
+            <div className="stat-value" style={{ color:'#3b82f6' }}>{stats.resolutionRate}%</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Responder Guidelines */}
+      <div className="card">
+        <div className="section-label" style={{ marginBottom:'0.75rem' }}>Responder Guidelines</div>
+        {[
+          'Only verify incidents you have genuinely reviewed.',
+          'Add notes when rejecting a report to help the user understand why.',
+          'Keep your availability status accurate so dispatchers know when you are on duty.',
+          'Respond to dispatched incidents promptly — response time is tracked.',
+        ].map((tip, i) => (
+          <div key={i} style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
+            <span style={{ color:'#3b82f6', flexShrink:0 }}>→</span>
+            <span style={{ fontSize:'0.8rem', color:'var(--text-muted)', lineHeight:1.6 }}>{tip}</span>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
+}
+
+// ── Login History Sub-component ───────────────────────────────────
+function LoginHistoryList() {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    API.get('/auth/login-history')
+      .then(({ data }) => setHistory(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color:'var(--text-muted)', fontSize:'0.82rem' }}>Loading…</div>;
+
+  return (
+    <div>
+      {history.map(h => (
+        <div key={h._id} style={{ display:'flex', justifyContent:'space-between', padding:'0.6rem 0', borderBottom:'1px solid #111', fontSize:'0.8rem' }}>
+          <div>
+            <div style={{ color:'var(--text-primary)', marginBottom:'0.15rem' }}>
+              {h.userAgent?.split(')')[0]?.replace('Mozilla/5.0 (','') || 'Unknown device'}
+            </div>
+            <div style={{ color:'#555', fontSize:'0.72rem' }}>
+              IP: {h.ipAddress || 'Unknown'} · via {h.method}
+            </div>
+          </div>
+          <div style={{ color:'#444', fontSize:'0.72rem', whiteSpace:'nowrap' }}>
+            {new Date(h.createdAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+          </div>
+        </div>
+      ))}
+      {history.length === 0 && <div style={{ color:'#555', fontSize:'0.82rem' }}>No login history recorded yet.</div>}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { user, logout, refreshUser } = useAuth();
   const { t }                         = useLanguage();
@@ -267,41 +364,6 @@ export default function ProfilePage() {
 
   const dashLink = getDashboardLink(user?.role);
 
-  function LoginHistoryList() {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    API.get('/auth/login-history')
-      .then(({ data }) => setHistory(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div style={{ color:'var(--text-muted)', fontSize:'0.82rem' }}>Loading…</div>;
-
-  return (
-    <div>
-      {history.map(h => (
-        <div key={h._id} style={{ display:'flex', justifyContent:'space-between', padding:'0.6rem 0', borderBottom:'1px solid #111', fontSize:'0.8rem' }}>
-          <div>
-            <div style={{ color:'var(--text-primary)', marginBottom:'0.15rem' }}>
-              {h.userAgent?.split(')')[0]?.replace('Mozilla/5.0 (','') || 'Unknown device'}
-            </div>
-            <div style={{ color:'#555', fontSize:'0.72rem' }}>
-              IP: {h.ipAddress || 'Unknown'} · via {h.method}
-            </div>
-          </div>
-          <div style={{ color:'#444', fontSize:'0.72rem', whiteSpace:'nowrap' }}>
-            {new Date(h.createdAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
-          </div>
-        </div>
-      ))}
-      {history.length === 0 && <div style={{ color:'#555', fontSize:'0.82rem' }}>No login history recorded yet.</div>}
-    </div>
-  );
-}
-
   return (
    <div className="dash-page">
 
@@ -441,16 +503,6 @@ export default function ProfilePage() {
           <button style={TAB('security')}      onClick={() => setActiveTab('security')}>🔐 Security</button>
           <button style={TAB('danger')}        onClick={() => setActiveTab('danger')}>Account</button>
         </div>
-
-        <button className={activeTab==='notifications'?'tab-active':'tab'} onClick={()=>setActiveTab('notifications')}>
-  🔔 Notifications
-</button>
-
-{/* Login History */}
-<div className="card">
-  <div className="section-label" style={{ marginBottom:'1rem' }}>Login History (last 20)</div>
-  <LoginHistoryList />
-</div>
 
         {/* ── Tab: Profile Info ─────────────────────────────────── */}
         {activeTab === 'profile' && (
@@ -683,48 +735,7 @@ export default function ProfilePage() {
 
         {/* ── Tab: Performance (responders only) ───────────────── */}
         {activeTab === 'performance' && user?.role === 'responder' && (
-          <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
-            <div className="card" style={{ textAlign:'center', padding:'2rem' }}>
-              <div style={{ fontSize:'2rem', marginBottom:'0.75rem' }}>🚒</div>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:'1.1rem', color:'var(--text-primary)', marginBottom:'0.4rem' }}>
-                Responder Performance
-              </div>
-              <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:0 }}>
-                Performance metrics are tracked automatically as you handle incidents.
-                Verify reports accurately and respond quickly to maintain a strong performance record.
-              </p>
-            </div>
-
-            <div className="stat-grid">
-              {[
-                { label:'Role',           value:'Responder',   color:'#3b82f6' },
-                { label:'Status',         value:'Active',      color:'#22c55e' },
-                { label:'Account Since',  value: new Date(user?.createdAt || Date.now()).toLocaleDateString('en-US', { month:'short', year:'numeric' }), color:'var(--text-primary)' },
-              ].map(item => (
-                <div key={item.label} className="stat-card">
-                  <div className="stat-label">{item.label}</div>
-                  <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:'1rem', color: item.color, marginTop:'0.25rem' }}>
-                    {item.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="card">
-              <div className="section-label" style={{ marginBottom:'0.75rem' }}>Responder Guidelines</div>
-              {[
-                'Only verify incidents you have genuinely reviewed.',
-                'Add notes when rejecting a report to help the user understand why.',
-                'Keep your availability status accurate so dispatchers know when you are on duty.',
-                'Respond to dispatched incidents promptly — response time is tracked.',
-              ].map((tip, i) => (
-                <div key={i} style={{ display:'flex', gap:'0.6rem', marginBottom:'0.6rem' }}>
-                  <span style={{ color:'#3b82f6', flexShrink:0 }}>→</span>
-                  <span style={{ fontSize:'0.8rem', color:'var(--text-muted)', lineHeight:1.6 }}>{tip}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ResponderPerformanceTab />
         )}
 
         {/* ── Tab: Notifications ────────────────────────────────── */}
@@ -973,6 +984,12 @@ export default function ProfilePage() {
                   )}
                 </div>
               ))}
+            </div>
+
+            {/* ── Login History Card ──────────────────────────────── */}
+            <div className="card">
+              <div className="section-label" style={{ marginBottom:'1rem' }}>Login History (last 20)</div>
+              <LoginHistoryList />
             </div>
 
           </div>

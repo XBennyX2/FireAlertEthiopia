@@ -271,6 +271,126 @@ const requestInfo = async (req, res) => {
   }
 };
 
+const reassignIncident = async (req, res) => {
+  try {
+    const { responderId } = req.body;
+    if (!responderId) return res.status(400).json({ message: 'Responder ID required.' });
+
+    const incident = await Incident.findById(req.params.id);
+    if (!incident) return res.status(404).json({ message: 'Incident not found.' });
+
+    const responder = await User.findById(responderId);
+    if (!responder || responder.role !== 'responder') {
+      return res.status(400).json({ message: 'Invalid responder.' });
+    }
+
+    incident.assignedTo = responderId;
+    incident.statusHistory = incident.statusHistory || [];
+    incident.statusHistory.push({
+      status:    incident.status,
+      timestamp: new Date(),
+      note:      `Reassigned to ${responder.name}`,
+      updatedBy: req.user._id,
+    });
+    await incident.save();
+
+    res.json({ message: `Incident reassigned to ${responder.name}.`, incident });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getMyPerformance = async (req, res) => {
+  try {
+    const responderId = req.user._id;
+
+    const allIncidents = await Incident.find({
+      $or: [
+        { assignedTo: responderId },
+        { 'statusHistory.updatedBy': responderId },
+      ]
+    });
+
+    const resolved   = allIncidents.filter(i => i.status === 'resolved');
+    const rejected   = allIncidents.filter(i => i.status === 'rejected');
+    const dispatched = allIncidents.filter(i => ['dispatched','resolved'].includes(i.status));
+
+    // Average response time (report to dispatch)
+    let totalResponseMs = 0;
+    let responseCount   = 0;
+    dispatched.forEach(i => {
+      const dispatchEntry = i.statusHistory?.find(h => h.status === 'dispatched');
+      if (dispatchEntry) {
+        totalResponseMs += new Date(dispatchEntry.timestamp) - new Date(i.reportedAt);
+        responseCount++;
+      }
+    });
+
+    const avgResponseMinutes = responseCount > 0
+      ? Math.round(totalResponseMs / responseCount / 60000)
+      : 0;
+
+    res.json({
+      totalHandled:       allIncidents.length,
+      resolved:           resolved.length,
+      rejected:           rejected.length,
+      dispatched:         dispatched.length,
+      avgResponseMinutes,
+      resolutionRate:     allIncidents.length > 0
+        ? ((resolved.length / allIncidents.length) * 100).toFixed(1)
+        : 0,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getLeaderboard = async (req, res) => {
+  try {
+    const responders = await User.find({ role: 'responder', isActive: true })
+      .select('name profilePhoto reputationScore');
+
+    // Count resolved incidents per responder
+    const counts = await Incident.aggregate([
+      { $match: { status: 'resolved' } },
+      { $unwind: '$statusHistory' },
+      { $match: { 'statusHistory.status': 'resolved' } },
+      { $group: { _id: '$statusHistory.updatedBy', count: { $sum: 1 } } },
+    ]);
+
+    const countMap = {};
+    counts.forEach(c => { if (c._id) countMap[c._id.toString()] = c.count; });
+
+    const board = responders.map(r => ({
+      _id:            r._id,
+      name:           r.name,
+      profilePhoto:   r.profilePhoto,
+      reputationScore:r.reputationScore,
+      resolvedCount:  countMap[r._id.toString()] || 0,
+    })).sort((a, b) => b.resolvedCount - a.resolvedCount || b.reputationScore - a.reputationScore)
+      .slice(0, 20);
+
+    res.json(board);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getShift = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('shiftSchedule isOnDuty');
+    res.json({ shiftSchedule: user.shiftSchedule || [], isOnDuty: user.isOnDuty || false });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};
+
+const updateShift = async (req, res) => {
+  try {
+    const { shiftSchedule } = req.body;
+    await User.findByIdAndUpdate(req.user._id, { shiftSchedule });
+    res.json({ message: 'Shift schedule updated.' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
+};
+
 module.exports = {
   getIncidentQueue,
   verifyIncident,
