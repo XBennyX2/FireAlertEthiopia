@@ -126,7 +126,7 @@ const S = {
   }
 };
 
-// Inject dropdown animation once
+// Inject dropdown animation and CSS-based hover states once
 if (!document.getElementById('bell-style')) {
   const style       = document.createElement('style');
   style.id          = 'bell-style';
@@ -134,6 +134,9 @@ if (!document.getElementById('bell-style')) {
     @keyframes dropIn {
       from { opacity: 0; transform: translateY(-8px); }
       to   { opacity: 1; transform: translateY(0); }
+    }
+    .notif-item:hover {
+      background-color: #161616 !important;
     }
   `;
   document.head.appendChild(style);
@@ -157,11 +160,29 @@ export default function NotificationBell() {
   const [notifications, setNotifs] = useState([]);
   const wrapRef     = useRef(null);
 
+  // Fallback to localhost if environment variable is not defined
+  const SOCKET_URL = window.env?.REACT_APP_SOCKET_URL || import.meta.env?.VITE_SOCKET_URL || 'http://localhost:5000';
+
+  // ── Functions ───────────────────────────────────────────────────
+  function markAllRead() {
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+  }
+
+  function markRead(id) {
+    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }
+
+  function handleViewAll() {
+    setOpen(false);
+    markAllRead();
+    navigate('/notifications');
+  }
+
   // ── Socket connection ───────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
 
-    const socket = io('http://localhost:5000');
+    const socket = io(SOCKET_URL);
 
     socket.on('connect', () => {
       if (user._id) socket.emit('join', user._id);
@@ -184,7 +205,12 @@ export default function NotificationBell() {
       }
     };
 
+    socket.on('infoRequest', (data) => {
+      addNotif('infoRequest', { message: data.message, incidentId: data.incidentId });
+    });
+
     socket.on('incidentUpdate', d => addNotif('incidentUpdate', d));
+    
     ['verified', 'dispatched', 'resolved', 'rejected'].forEach(ev => {
       socket.on(ev, d => addNotif(ev, d));
     });
@@ -199,29 +225,34 @@ export default function NotificationBell() {
     });
 
     return () => socket.disconnect();
-  }, [user]);
+  }, [user, SOCKET_URL]);
 
+  // ── Native Push Request ─────────────────────────────────────────
   useEffect(() => {
-  if (!user) return;
-  // Request push notification permission once
-  const key = `push_asked_${user._id}`;
-  if (!localStorage.getItem(key) && 'Notification' in window) {
-    setTimeout(() => {
-      Notification.requestPermission().then(permission => {
-        localStorage.setItem(key, '1');
-        if (permission === 'granted') {
-          console.log('Push notification permission granted');
-        }
-      });
-    }, 5000); // Ask after 5s so it doesn't interrupt page load
-  }
-}, [user]);
+    if (!user) return;
+    const key = `push_asked_${user._id}`;
+    if (!localStorage.getItem(key) && 'Notification' in window) {
+      const timer = setTimeout(() => {
+        Notification.requestPermission().then(permission => {
+          localStorage.setItem(key, '1');
+          if (permission === 'granted') {
+            console.log('Push notification permission granted');
+          }
+        });
+      }, 5000); // Ask after 5s so it doesn't interrupt page load
+      
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
 
   // ── Close dropdown when clicking outside ───────────────────────
   useEffect(() => {
     function handleClick(e) {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        setOpen(false);
+        setOpen(isOpen => {
+          if (isOpen) markAllRead(); // Mark read when closing via click outside
+          return false;
+        });
       }
     }
     document.addEventListener('mousedown', handleClick);
@@ -229,20 +260,6 @@ export default function NotificationBell() {
   }, []);
 
   const unread = notifications.filter(n => !n.read).length;
-
-  function markAllRead() {
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-  }
-
-  function markRead(id) {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  }
-
-  function handleViewAll() {
-    setOpen(false);
-    markAllRead();
-    navigate('/notifications');
-  }
 
   return (
     <div style={S.wrap} ref={wrapRef}>
@@ -253,7 +270,13 @@ export default function NotificationBell() {
           ...S.btn,
           borderColor: open ? '#e63c2f' : '#2a2a2a'
         }}
-        onClick={() => { setOpen(v => !v); if (unread > 0) markAllRead(); }}
+        onClick={() => { 
+          setOpen(prev => {
+            const nextState = !prev;
+            if (!nextState) markAllRead(); // Mark read ONLY when the user manually closes it
+            return nextState;
+          });
+        }}
         title="Notifications"
       >
         🔔
@@ -279,22 +302,20 @@ export default function NotificationBell() {
             notifications.slice(0, 5).map(n => (
               <div
                 key={n.id}
+                className="notif-item"
                 style={{
                   ...S.item,
                   background: n.read ? 'transparent' : 'rgba(244,130,10,0.04)',
                 }}
                 onClick={() => {
                   markRead(n.id);
+                  setOpen(false);
                   if (n.incidentId) {
-                    setOpen(false);
                     navigate(`/incidents/${n.incidentId}`);
                   } else if (n.postId) {
-                    setOpen(false);
                     navigate(`/forum/${n.postId}`);
                   }
                 }}
-                onMouseOver={e => e.currentTarget.style.background = '#161616'}
-                onMouseOut={e  => e.currentTarget.style.background = n.read ? 'transparent' : 'rgba(244,130,10,0.04)'}
               >
                 <div style={S.dot(n.read)} />
                 <div>

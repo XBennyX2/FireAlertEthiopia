@@ -306,6 +306,23 @@ export default function IncidentDetailPage() {
             ))}
           </div>
         </div>
+        {incident.infoRequests?.length > 0 && (
+  <div className="card" style={{ marginBottom:'1.25rem' }}>
+    <div style={{ color:'var(--text-dim)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.75rem' }}>
+      Responder Questions
+    </div>
+    {incident.infoRequests.map((req, i) => (
+      <div key={i} style={{ padding:'0.65rem 0', borderBottom:'1px solid #111' }}>
+        <div style={{ fontSize:'0.82rem', color:'#f0ede8', marginBottom:'0.25rem' }}>
+          ❓ {req.message}
+        </div>
+        <div style={{ fontSize:'0.72rem', color:'#555' }}>
+          {new Date(req.requestedAt).toLocaleString()}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 
         {/* ── Description ──────────────────────────────────────── */}
         <div className="card" style={{ marginBottom:'1.25rem' }}>

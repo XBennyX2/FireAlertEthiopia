@@ -17,5 +17,6 @@ router.put('/incidents/:id/verify',   protect, authorize('responder', 'admin'), 
 router.put('/incidents/:id/dispatch', protect, authorize('responder', 'admin'), dispatchIncident);
 router.put('/incidents/:id/resolve',  protect, authorize('responder', 'admin'), resolveIncident);
 router.put('/incidents/:id/reject',   protect, authorize('responder', 'admin'), rejectIncident);
+router.post('/incidents/:id/request-info', protect, authorize('responder','admin'), requestInfo);
 
 module.exports = router;

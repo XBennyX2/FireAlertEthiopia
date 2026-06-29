@@ -236,6 +236,41 @@ const rejectIncident = async (req, res) => {
   }
 };
 
+const requestInfo = async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message?.trim()) return res.status(400).json({ message: 'Message is required.' });
+
+    const incident = await Incident.findById(req.params.id).populate('reportedBy');
+    if (!incident) return res.status(404).json({ message: 'Incident not found.' });
+
+    incident.infoRequests = incident.infoRequests || [];
+    incident.infoRequests.push({
+      message: message.trim(),
+      requestedBy: req.user._id,
+      requestedAt: new Date(),
+    });
+    await incident.save();
+
+    // Notify reporter via Socket.io
+    const io = req.app.get('io');
+    if (io && incident.reportedBy?._id) {
+      io.to(incident.reportedBy._id.toString()).emit('infoRequest', {
+        message:    `A responder is requesting more information about your report: "${message}"`,
+        incidentId: incident._id.toString(),
+      });
+    }
+
+    // Send email
+    const { sendStatusUpdateEmail } = require('../utils/emailService');
+    // (Re-use or create a new email template as needed)
+
+    res.json({ message: 'Info request sent to reporter.', incident });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getIncidentQueue,
   verifyIncident,

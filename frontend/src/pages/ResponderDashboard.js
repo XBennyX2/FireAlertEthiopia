@@ -309,6 +309,23 @@ export default function ResponderDashboard() {
 
                     {/* Meta actions & badges */}
                     <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize:'0.72rem' }}
+                        onClick={async () => {
+                          const msg = window.prompt('What additional information do you need from the reporter?');
+                          if (!msg?.trim()) return;
+                          try {
+                            await API.post(`/responder/incidents/${incident._id}/request-info`, { message: msg });
+                            toast.success('Info request sent to reporter.');
+                          } catch (err) {
+                            toast.error(err.response?.data?.message || 'Failed to send request.');
+                          }
+                        }}
+                      >
+                        ❓ Request Info
+                      </button>
+
                       <Link  
                         to={`/incidents/${incident._id}`}  
                         className="btn-secondary"  
