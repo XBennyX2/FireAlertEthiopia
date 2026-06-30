@@ -196,39 +196,39 @@ const likePost = async (req, res) => {
 };
 
 // ── POST /api/forum/:id/replies — add reply ──────────────────────
-const addReply = async (req, res) => {
-  try {
-    const { content } = req.body;
-    if (!content?.trim()) return res.status(400).json({ message: 'Reply cannot be empty' });
+// const addReply = async (req, res) => {
+//   try {
+//     const { content } = req.body;
+//     if (!content?.trim()) return res.status(400).json({ message: 'Reply cannot be empty' });
 
-    const post = await ForumPost.findById(req.params.id).populate('author', '_id name');
-    if (!post || post.isRemoved) return res.status(404).json({ message: 'Post not found' });
+//     const post = await ForumPost.findById(req.params.id).populate('author', '_id name');
+//     if (!post || post.isRemoved) return res.status(404).json({ message: 'Post not found' });
 
-    post.replies.push({ author: req.user._id, content: content.trim(), createdAt: new Date() });
-    await post.save();
+//     post.replies.push({ author: req.user._id, content: content.trim(), createdAt: new Date() });
+//     await post.save();
 
-    // Notify post owner if someone else replied
-    const isOwnPost = post.author._id.toString() === req.user._id.toString();
-    if (!isOwnPost) {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(post.author._id.toString()).emit('forumReply', {
-          message:    `${req.user.name} replied to your post: "${post.title}"`,
-          postId:     post._id.toString(),
-          incidentId: null,
-        });
-      }
-    }
+//     // Notify post owner if someone else replied
+//     const isOwnPost = post.author._id.toString() === req.user._id.toString();
+//     if (!isOwnPost) {
+//       const io = req.app.get('io');
+//       if (io) {
+//         io.to(post.author._id.toString()).emit('forumReply', {
+//           message:    `${req.user.name} replied to your post: "${post.title}"`,
+//           postId:     post._id.toString(),
+//           incidentId: null,
+//         });
+//       }
+//     }
 
-    const populated = await ForumPost.findById(post._id)
-      .populate('author', 'name role profilePhoto')
-      .populate('replies.author', 'name role profilePhoto');
+//     const populated = await ForumPost.findById(post._id)
+//       .populate('author', 'name role profilePhoto')
+//       .populate('replies.author', 'name role profilePhoto');
 
-    res.status(201).json(populated.replies[populated.replies.length - 1]);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+//     res.status(201).json(populated.replies[populated.replies.length - 1]);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 // ── DELETE /api/forum/:id/replies/:replyId — delete reply ────────
 const deleteReply = async (req, res) => {

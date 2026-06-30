@@ -6,6 +6,7 @@ const { parse }     = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 const bcrypt         = require('bcryptjs');
 const multer          = require('multer');
+const ForumPost = require('../models/ForumPost');
 
 const csvUpload = multer({ storage: multer.memoryStorage() }).single('file');
 // ── Helper: write an audit log entry ─────────────────────────────
@@ -703,6 +704,66 @@ const importUsersCSV = (req, res) => {
   });
 };
 
+const getUserDetail = async (req, res) => {
+  try {
+    const user      = await User.findById(req.params.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    const incidents   = await Incident.find({ reportedBy: req.params.id }).sort({ reportedAt: -1 }).limit(20);
+    const forumPosts  = await ForumPost.find({ author: req.params.id }).sort({ createdAt: -1 }).limit(10);
+    const application = await Application.findOne({ applicant: req.params.id }).sort({ createdAt: -1 });
+    const auditLogs   = await AuditLog.find({ performedBy: req.params.id }).sort({ createdAt: -1 }).limit(10);
+
+    res.json({ user, incidents, forumPosts, application, auditLogs });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const { sendStatusUpdateEmail } = require('../utils/emailService');
+
+const bulkMessage = async (req, res) => {
+  try {
+    const { subject, message, targetRole, targetAll } = req.body;
+    if (!subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ message: 'Subject and message are required.' });
+    }
+
+    const query = { isActive: true, isVerified: true };
+    if (!targetAll && targetRole) query.role = targetRole;
+
+    const users = await User.find(query).select('email name');
+
+    const transporter = require('../utils/emailTransporter');
+
+    let sent = 0;
+    for (const user of users) {
+      await transporter.sendMail({
+        from:    process.env.EMAIL_FROM,
+        to:      user.email,
+        subject: `FireAlert: ${subject}`,
+        html: `
+          <div style="font-family:Arial;max-width:480px;margin:0 auto;background:#0e0e0e;color:#f0ede8;padding:2rem;border-radius:12px;">
+            <div style="text-align:center;margin-bottom:1.5rem;">
+              <div style="background:linear-gradient(135deg,#e63c2f,#f4820a);width:48px;height:48px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:1.5rem;">🔥</div>
+              <h1 style="font-size:1.1rem;font-weight:800;margin:.5rem 0 0;color:#f0ede8;">FireAlert</h1>
+            </div>
+            <h2 style="font-size:1rem;color:#f0ede8;margin:0 0 1rem;">${subject}</h2>
+            <div style="font-size:.875rem;color:#888;line-height:1.7;white-space:pre-line;">${message}</div>
+            <p style="font-size:.75rem;color:#555;margin-top:1.5rem;">This message was sent by FireAlert admins.</p>
+          </div>
+        `,
+      }).catch(() => {});
+      sent++;
+    }
+
+    await log(req.user._id, 'BULK_MESSAGE_SENT', `Sent bulk message "${subject}" to ${sent} users (role: ${targetRole || 'all'})`);
+
+    res.json({ message: `Message sent to ${sent} users.`, sent });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 module.exports = {
   getAllUsers,
   changeUserRole,

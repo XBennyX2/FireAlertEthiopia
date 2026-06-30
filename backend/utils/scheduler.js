@@ -68,6 +68,57 @@ async function sendWeeklySafetyDigest() {
     console.error('Digest error:', err.message);
   }
 }
+async function sendAdminWeeklyReport() {
+  try {
+    const admins  = await User.find({ role: 'admin', isActive: true }).select('email name');
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-module.exports = { publishScheduledContent, sendWeeklySafetyDigest };
-module.exports = { publishScheduledContent };
+    const [newUsers, newIncidents, resolved, rejected] = await Promise.all([
+      User.countDocuments({ createdAt: { $gte: oneWeekAgo } }),
+      Incident.countDocuments({ reportedAt: { $gte: oneWeekAgo } }),
+      Incident.countDocuments({ status:'resolved', resolvedAt: { $gte: oneWeekAgo } }),
+      Incident.countDocuments({ status:'rejected', updatedAt: { $gte: oneWeekAgo } }),
+    ]);
+
+    const transporter = require('./emailTransporter');
+
+    for (const admin of admins) {
+      await transporter.sendMail({
+        from:    process.env.EMAIL_FROM,
+        to:      admin.email,
+        subject: `FireAlert Weekly Report — ${new Date().toLocaleDateString()}`,
+        html: `
+          <div style="font-family:Arial;max-width:480px;margin:0 auto;background:#0e0e0e;color:#f0ede8;padding:2rem;border-radius:12px;">
+            <h2 style="color:#f4820a;font-size:1rem;margin:0 0 1.5rem;">📊 Weekly Admin Report</h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem;">
+              <div style="background:#161616;border-radius:8px;padding:.75rem;">
+                <div style="font-size:.75rem;color:#555;">New Users</div>
+                <div style="font-size:1.5rem;font-weight:800;color:#3b82f6;">${newUsers}</div>
+              </div>
+              <div style="background:#161616;border-radius:8px;padding:.75rem;">
+                <div style="font-size:.75rem;color:#555;">New Incidents</div>
+                <div style="font-size:1.5rem;font-weight:800;color:#f4820a;">${newIncidents}</div>
+              </div>
+              <div style="background:#161616;border-radius:8px;padding:.75rem;">
+                <div style="font-size:.75rem;color:#555;">Resolved</div>
+                <div style="font-size:1.5rem;font-weight:800;color:#22c55e;">${resolved}</div>
+              </div>
+              <div style="background:#161616;border-radius:8px;padding:.75rem;">
+                <div style="font-size:.75rem;color:#555;">Rejected</div>
+                <div style="font-size:1.5rem;font-weight:800;color:#e63c2f;">${rejected}</div>
+              </div>
+            </div>
+            <p style="font-size:.75rem;color:#555;">Open the admin dashboard for full details.</p>
+          </div>
+        `,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Admin weekly report error:', err.message);
+  }
+}
+
+module.exports = { publishScheduledContent, sendWeeklySafetyDigest, sendAdminWeeklyReport };
+
+// module.exports = { publishScheduledContent, sendWeeklySafetyDigest };
+// module.exports = { publishScheduledContent };

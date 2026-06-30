@@ -178,5 +178,15 @@ setTimeout(() => {
   setInterval(sendWeeklySafetyDigest, 7 * 24 * 60 * 60 * 1000);
 }, next - now);
 
+const { publishScheduledContent, sendWeeklySafetyDigest, sendAdminWeeklyReport } = require('./utils/scheduler');
+// Weekly admin report — every Monday at 08:00
+const nextMonday = new Date();
+nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
+nextMonday.setHours(8, 0, 0, 0);
+setTimeout(() => {
+  sendAdminWeeklyReport();
+  setInterval(sendAdminWeeklyReport, 7 * 24 * 60 * 60 * 1000);
+}, nextMonday - new Date());
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

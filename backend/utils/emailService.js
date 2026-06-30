@@ -156,6 +156,7 @@ async function sendStatusUpdateEmail(toEmail, userName, status, fireType, incide
     html,
   });
 }
+const transporter = require('./emailTransporter');
 
 module.exports = {
   generateVerificationCode,

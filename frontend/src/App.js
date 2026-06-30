@@ -27,6 +27,8 @@ import TwoFactorPage from './pages/TwoFactorPage';
 import ServerErrorPage from './pages/ServerErrorPage';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import PublicFeedPage from './pages/PublicFeedPage';
+import UserDetailPage from './pages/UserDetailPage';
+
 
 
 
@@ -84,6 +86,11 @@ function App() {
               <UserDashboard />
             </ProtectedRoute>
           } />
+          <Route path="/admin/users/:id" element={
+  <ProtectedRoute allowedRoles={['admin']}>
+    <UserDetailPage />
+  </ProtectedRoute>
+} />
           <Route path="/report" element={
             <ProtectedRoute allowedRoles={['user']}>
               <ReportForm />

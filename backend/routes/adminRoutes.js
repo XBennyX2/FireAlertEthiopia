@@ -9,7 +9,9 @@ const { submitApplication, getMyApplication } = require('../controllers/adminCon
 
 // Note: these use protect only (any logged-in user), not authorize('admin')
 router.post('/applications',      protect, submitApplication);
+router.post('/bulk-message', protect, authorize('admin'), bulkMessage);
 router.get('/applications/mine',  protect, getMyApplication);
+router.get('/users/:id/detail', protect, authorize('admin'), getUserDetail);
 // Controller Imports (All consolidated here)
 const {
   getAllUsers,
