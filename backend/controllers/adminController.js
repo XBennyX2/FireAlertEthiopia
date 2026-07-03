@@ -39,6 +39,36 @@ const getMyApplication = async (req, res) => {
   }
 };
 
+const getResponderPerformance = async (req, res) => {
+  try {
+    const responders = await User.find({ role:'responder', isActive:true })
+      .select('name email profilePhoto reputationScore');
+
+    const stats = await Promise.all(responders.map(async r => {
+      const handled  = await Incident.countDocuments({ 'statusHistory.updatedBy': r._id });
+      const resolved = await Incident.countDocuments({ status:'resolved', 'statusHistory.updatedBy': r._id });
+      const rejected = await Incident.countDocuments({ status:'rejected', 'statusHistory.updatedBy': r._id });
+
+      return {
+        _id:            r._id,
+        name:           r.name,
+        email:          r.email,
+        profilePhoto:   r.profilePhoto,
+        reputationScore:r.reputationScore,
+        handled,
+        resolved,
+        rejected,
+        resolutionRate: handled > 0 ? ((resolved/handled)*100).toFixed(1) : 0,
+      };
+    }));
+
+    stats.sort((a,b) => b.resolved - a.resolved);
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // PUT /api/admin/users/:id/role — change a user's role
 const changeUserRole = async (req, res) => {
   const { role } = req.body;
@@ -113,7 +143,6 @@ const getApplications = async (req, res) => {
 
 // POST /api/admin/applications — submit a responder application (any logged-in user)
 // POST /api/admin/applications — user submits a responder application
-const multer = require('multer');
 const path   = require('path');
 const fs     = require('fs');
 
@@ -233,7 +262,6 @@ const submitApplication = (req, res) => {
   });
 };
 
-module.exports = { submitApplication };
 // PUT /api/admin/applications/:id/approve
 const approveApplication = async (req, res) => {
   try {
@@ -243,23 +271,34 @@ const approveApplication = async (req, res) => {
       return res.status(404).json({ message: 'Application not found' });
     }
 
+    // Update application status and review metadata
     application.status = 'approved';
+    application.reviewedBy = req.user._id;
+    application.reviewedAt = new Date();  
+    
     await application.save();
+
+    // Send real-time notification to the applicant
+    const io = req.app.get('io');
+    if (io && application.applicant) {
+      io.to(application.applicant.toString()).emit('applicationApproved', {
+        message: 'Congratulations! Your responder application has been approved. You are now a fire responder.',
+        incidentId: null,
+      });
+    }
 
     // Promote the user to responder
     await User.findByIdAndUpdate(application.applicant, { role: 'responder' });
 
+    // Log the action
     await log(req.user._id, 'APPLICATION_APPROVED', `Approved responder application for ${application.email}`);
 
     res.json({ message: 'Application approved. User promoted to responder.' });
-    application.reviewedBy = req.user._id;
-application.reviewedAt = new Date();  
 
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 // PUT /api/admin/applications/:id/reject
 // PUT /api/admin/applications/:id/reject
 const rejectApplication = async (req, res) => {
@@ -276,15 +315,22 @@ const rejectApplication = async (req, res) => {
     application.rejectionReason = rejectionReason || '';
     await application.save();
 
+    // Notify the applicant via Socket.io
+    const io = req.app.get('io');
+    if (io && application.applicant) {
+      io.to(application.applicant.toString()).emit('applicationRejected', {
+        message:    `Your responder application was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ''}`,
+        incidentId: null,
+      });
+    }
+
     await log(req.user._id, 'APPLICATION_REJECTED', `Rejected responder application from ${application.email}`);
 
     res.json({ message: 'Application rejected', application });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
-};
-// GET /api/admin/logs — get audit logs
+};// GET /api/admin/logs — get audit logs
 // GET /api/admin/audit-logs — with filtering
 const getAuditLogs = async (req, res) => {
   try {
@@ -377,19 +423,22 @@ const getAnalytics = async (req, res) => {
       if (endDate)   query.reportedAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59));
     }
 
-    const incidents = await Incident.find(query);
+    const [incidents, totalUsers] = await Promise.all([
+      Incident.find(query),
+      User.countDocuments({ isActive: true }),
+    ]);
 
     const total      = incidents.length;
     const byStatus   = {};
     const byFireType = {};
     const byMonth    = {};
-    let resolvedCount = 0;
-    let rejectedCount = 0;
+    let resolvedCount       = 0;
+    let rejectedCount       = 0;
     let totalResponseTimeMs = 0;
     let responseTimeCount   = 0;
 
     incidents.forEach(i => {
-      byStatus[i.status]     = (byStatus[i.status]     || 0) + 1;
+      byStatus[i.status]      = (byStatus[i.status]      || 0) + 1;
       byFireType[i.fire_type] = (byFireType[i.fire_type] || 0) + 1;
 
       const month = new Date(i.reportedAt).toLocaleString('en-US', { month:'short', year:'numeric' });
@@ -411,20 +460,28 @@ const getAnalytics = async (req, res) => {
     const falseReportRate  = total > 0 ? ((rejectedCount / total) * 100).toFixed(1) : 0;
     const verificationRate = total > 0 ? (((total - rejectedCount) / total) * 100).toFixed(1) : 0;
 
-    // Peak incident hours
     const byHour = Array(24).fill(0);
     incidents.forEach(i => {
       const hour = new Date(i.reportedAt).getHours();
       byHour[hour]++;
     });
 
+    // Sort byMonth chronologically
+    const sortedByMonth = {};
+    Object.keys(byMonth)
+      .sort((a, b) => new Date(a) - new Date(b))
+      .forEach(k => { sortedByMonth[k] = byMonth[k]; });
+
     res.json({
       total,
+      totalIncidents:         total,
+      totalUsers,                          // ← this was missing
       byStatus,
       byFireType,
-      byMonth,
+      byMonth:                sortedByMonth,
       byHour,
       avgResponseTimeMinutes,
+      avgResponseMinutes:     avgResponseTimeMinutes,
       falseReportRate,
       verificationRate,
       resolvedCount,
@@ -436,7 +493,6 @@ const getAnalytics = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 // GET /api/admin/analytics/export/csv
 const exportAnalyticsCSV = async (req, res) => {
   try {
@@ -776,10 +832,13 @@ module.exports = {
   adjustReputation,
   unbanUser,
   getAnalytics,
-  exportAuditLogsCSV, // <-- Make sure these are here!
+  exportAuditLogsCSV,
   exportAnalyticsCSV,
   exportAnalyticsPDF,
   exportUsersCSV,
   importUsersCSV,
   getMyApplication,
+  bulkMessage,          // ← add
+  getUserDetail,        // ← add
+  getResponderPerformance, // ← add
 };

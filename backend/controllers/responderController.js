@@ -3,6 +3,7 @@ const User     = require('../models/User');
 const axios    = require('axios');
 const { updateReputationScore } = require('../utils/reputationManager');
 const { sendStatusUpdateEmail } = require('../utils/emailService');
+const { sendPushToUser }        = require('../utils/pushNotification');
 
 // ── Helper: emit socket event to reporter ─────────────────────────
 function notifyReporter(req, incident, eventType, message) {
@@ -57,6 +58,7 @@ const verifyIncident = async (req, res) => {
     });
     await incident.save();
 
+    // 1. Socket Notification
     const io = req.app.get('io');
     if (io && incident.reportedBy?._id) {
       io.to(incident.reportedBy._id.toString()).emit('verified', {
@@ -65,7 +67,7 @@ const verifyIncident = async (req, res) => {
       });
     }
 
-    // Email Notification with user preference guard
+    // 2. Email Notification with user preference guard
     const prefs = incident.reportedBy?.notificationPrefs;
     if (prefs?.emailOnVerified !== false && incident.reportedBy?.email) {
       sendStatusUpdateEmail(
@@ -77,7 +79,19 @@ const verifyIncident = async (req, res) => {
       ).catch(err => console.error('Status email error:', err.message));
     }
 
-    await updateReporterReputation(incident.reportedBy, 'verified');
+    // 3. Push Notification
+    if (incident.reportedBy?._id) {
+      sendPushToUser(incident.reportedBy._id.toString(), {
+        title:  'FireAlert Update',
+        body:   `Your report has been verified`,
+        url:    `/incidents/${incident._id}`,
+      }).catch(err => console.error('Push notification error:', err.message));
+    }
+
+    // Note: Ensure updateReporterReputation is imported or defined if used here
+    if (typeof updateReporterReputation === 'function') {
+      await updateReporterReputation(incident.reportedBy, 'verified');
+    }
 
     res.json({ message: 'Incident verified', incident });
   } catch (error) {
@@ -102,6 +116,7 @@ const dispatchIncident = async (req, res) => {
     });
     await incident.save();
 
+    // 1. Socket Notification
     const io = req.app.get('io');
     if (io && incident.reportedBy?._id) {
       io.to(incident.reportedBy._id.toString()).emit('dispatched', {
@@ -110,7 +125,7 @@ const dispatchIncident = async (req, res) => {
       });
     }
 
-    // Email Notification with user preference guard
+    // 2. Email Notification with user preference guard
     const prefs = incident.reportedBy?.notificationPrefs;
     if (prefs?.emailOnDispatched !== false && incident.reportedBy?.email) {
       sendStatusUpdateEmail(
@@ -120,6 +135,15 @@ const dispatchIncident = async (req, res) => {
         incident.fire_type,
         incident._id,
       ).catch(err => console.error('Status email error:', err.message));
+    }
+
+    // 3. Push Notification
+    if (incident.reportedBy?._id) {
+      sendPushToUser(incident.reportedBy._id.toString(), {
+        title:  'FireAlert Update',
+        body:   `Your report has been dispatched`,
+        url:    `/incidents/${incident._id}`,
+      }).catch(err => console.error('Push notification error:', err.message));
     }
 
     res.json({ message: 'Responders dispatched', incident });
@@ -146,6 +170,7 @@ const resolveIncident = async (req, res) => {
     });
     await incident.save();
 
+    // 1. Socket Notification
     const io = req.app.get('io');
     if (io && incident.reportedBy?._id) {
       io.to(incident.reportedBy._id.toString()).emit('resolved', {
@@ -154,7 +179,7 @@ const resolveIncident = async (req, res) => {
       });
     }
 
-    // Email Notification with user preference guard
+    // 2. Email Notification with user preference guard
     const prefs = incident.reportedBy?.notificationPrefs;
     if (prefs?.emailOnResolved !== false && incident.reportedBy?.email) {
       sendStatusUpdateEmail(
@@ -164,6 +189,15 @@ const resolveIncident = async (req, res) => {
         incident.fire_type,
         incident._id,
       ).catch(err => console.error('Status email error:', err.message));
+    }
+
+    // 3. Push Notification
+    if (incident.reportedBy?._id) {
+      sendPushToUser(incident.reportedBy._id.toString(), {
+        title:  'FireAlert Update',
+        body:   `Your report has been resolved`,
+        url:    `/incidents/${incident._id}`,
+      }).catch(err => console.error('Push notification error:', err.message));
     }
 
     const result = await updateReputationScore(incident.reportedBy, 'verified');
@@ -196,6 +230,7 @@ const rejectIncident = async (req, res) => {
     });
     await incident.save();
 
+    // 1. Socket Notification
     const io = req.app.get('io');
     if (io && incident.reportedBy?._id) {
       io.to(incident.reportedBy._id.toString()).emit('rejected', {
@@ -204,7 +239,7 @@ const rejectIncident = async (req, res) => {
       });
     }
 
-    // Email Notification with user preference guard
+    // 2. Email Notification with user preference guard
     const prefs = incident.reportedBy?.notificationPrefs;
     if (prefs?.emailOnRejected !== false && incident.reportedBy?.email) {
       sendStatusUpdateEmail(
@@ -214,6 +249,15 @@ const rejectIncident = async (req, res) => {
         incident.fire_type,
         incident._id,
       ).catch(err => console.error('Status email error:', err.message));
+    }
+
+    // 3. Push Notification
+    if (incident.reportedBy?._id) {
+      sendPushToUser(incident.reportedBy._id.toString(), {
+        title:  'FireAlert Update',
+        body:   `Your report has been rejected`,
+        url:    `/incidents/${incident._id}`,
+      }).catch(err => console.error('Push notification error:', err.message));
     }
 
     const result = await updateReputationScore(incident.reportedBy, 'false_report');
@@ -260,10 +304,6 @@ const requestInfo = async (req, res) => {
         incidentId: incident._id.toString(),
       });
     }
-
-    // Send email
-    const { sendStatusUpdateEmail } = require('../utils/emailService');
-    // (Re-use or create a new email template as needed)
 
     res.json({ message: 'Info request sent to reporter.', incident });
   } catch (error) {
@@ -397,4 +437,10 @@ module.exports = {
   dispatchIncident,
   resolveIncident,
   rejectIncident,
+  requestInfo,
+  reassignIncident,
+  getMyPerformance,
+  getLeaderboard,
+  getShift,
+  updateShift
 };

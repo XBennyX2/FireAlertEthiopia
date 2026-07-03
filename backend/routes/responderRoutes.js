@@ -8,7 +8,13 @@ const {
   verifyIncident,
   dispatchIncident,
   resolveIncident,
-  rejectIncident
+  rejectIncident,
+  requestInfo,
+  reassignIncident,
+  getMyPerformance,
+  getLeaderboard,
+  getShift,
+  updateShift
 } = require('../controllers/responderController');
 
 // All routes require login AND responder or admin role

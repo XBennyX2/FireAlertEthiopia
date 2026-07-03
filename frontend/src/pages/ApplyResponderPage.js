@@ -198,7 +198,12 @@ export default function ApplyResponderPage() {
             <div className="two-col">
               <div className="form-group">
                 <label className="form-label">Phone Number</label>
-                <input className="form-input" placeholder="09xx xxx xxx" value={phone} onChange={e => setPhone(e.target.value)} />
+                <input 
+                  className="form-input" 
+                  placeholder="09xx xxx xxx" 
+                  value={phone} 
+                  onChange={e => setPhone(e.target.value.replace(/[^0-9+\-\s]/g, ''))} 
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Years of Relevant Experience</label>

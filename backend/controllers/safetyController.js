@@ -225,6 +225,21 @@ const deleteContent = async (req, res) => {
   }
 };
 
+// PUT /api/safety/:id/view — increment view count
+const recordView = async (req, res) => {
+  try {
+    const content = await SafetyContent.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+    if (!content) return res.status(404).json({ message: 'Content not found.' });
+    res.json({ message: 'View recorded.', views: content.views });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getPublicContent, 
   getPendingContent, 
@@ -235,4 +250,5 @@ module.exports = {
   rejectContent, 
   togglePin, 
   deleteContent,
+  recordView,
 };

@@ -6,13 +6,6 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import API from '../api/axios';
 import '../dashboard.css';
 
-const CATEGORY_LABELS = {
-  prevention:          '🔥 Fire Prevention',
-  emergency_procedure: '🚨 Emergency Procedure',
-  preparedness:        '🏠 Home Preparedness',
-  contact:             '📞 Emergency Contacts',
-};
-
 const CATEGORY_COLORS = {
   prevention:          '#e63c2f',
   emergency_procedure: '#f4820a',
@@ -31,14 +24,24 @@ export default function SafetyPage() {
   const { user }  = useAuth();
   const { t }     = useLanguage();
 
+  // Define labels inside the component to access the current language state
+  const CATEGORY_LABELS = {
+    prevention:          t.language === 'am' ? '🔥 ከእሳት መከላከል' : '🔥 Fire Prevention',
+    emergency_procedure: t.language === 'am' ? '🚨 የአደጋ ጊዜ ሂደት' : '🚨 Emergency Procedure',
+    preparedness:        t.language === 'am' ? '🏠 ዝግጁነት'       : '🏠 Home Preparedness',
+    contact:             t.language === 'am' ? '📞 የአደጋ ጊዜ ስልኮች': '📞 Emergency Contacts',
+  };
+
   const [content,       setContent]       = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const { data } = await API.get('/safety');
+        // Fetch content based on the selected language
+        const { data } = await API.get(`/safety?language=${t.language || 'en'}`);
         setContent(data);
       } catch {
         // fail silently — static content still renders
@@ -47,7 +50,7 @@ export default function SafetyPage() {
       }
     }
     load();
-  }, []);
+  }, [t.language]); // Added dependency so it refetches on language toggle
 
   const categories = ['all', ...Object.keys(CATEGORY_LABELS)];
 
@@ -60,11 +63,11 @@ export default function SafetyPage() {
   const displayed = [...pinned, ...unpinned];
 
   useEffect(() => {
-  // Record views for displayed items
-  displayed.forEach(item => {
-    API.put(`/safety/${item._id}/view`).catch(() => {});
-  });
-}, [displayed.length]);
+    // Record views for displayed items
+    displayed.forEach(item => {
+      API.put(`/safety/${item._id}/view`).catch(() => {});
+    });
+  }, [displayed.length]);
 
   return (
     <div className="dash-page">
@@ -163,7 +166,7 @@ export default function SafetyPage() {
                 transition:'all 0.15s',
               }}
             >
-              {cat === 'all' ? 'All' : CATEGORY_LABELS[cat]}
+              {cat === 'all' ? (t.language === 'am' ? 'ሁሉም' : 'All') : CATEGORY_LABELS[cat]}
             </button>
           ))}
         </div>

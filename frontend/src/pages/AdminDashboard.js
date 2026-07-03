@@ -46,16 +46,28 @@ export default function AdminDashboard() {
   const [logPage,         setLogPage]         = useState(1);
   const [logTotalPages,   setLogTotalPages]   = useState(1);
   const [pendingSafety, setPendingSafety] = useState([]);
+  
+  // Bulk message state
+  const [bulkTarget,  setBulkTarget]  = useState('all');
+  const [bulkSubject, setBulkSubject] = useState('');
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkSending, setBulkSending] = useState(false);
 
   // Health state
   const [health, setHealth] = useState(null);
-
+  
   // Appeals & Forum state
   const [appeals, setAppeals] = useState([]);
   const [flaggedPosts, setFlaggedPosts] = useState([]);
-
+  
   useEffect(() => { loadAll(); }, []);
-
+  const [responderStats, setResponderStats] = useState([]);
+  
+  useEffect(() => {
+    if (tab !== 'performance') return;
+    API.get('/admin/responder-performance').then(({ data }) => setResponderStats(data)).catch(() => {});
+  }, [tab]);
+  
   async function loadAll() {
     setLoading(true);
     try {
@@ -129,7 +141,7 @@ export default function AdminDashboard() {
     const interval = setInterval(loadHealth, 10000);
     return () => clearInterval(interval);
   }, [tab]);
-
+  
   async function loadAnalytics() {
     try {
       const params = new URLSearchParams();
@@ -145,7 +157,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'analytics') loadAnalytics();
   }, [tab, analyticsStartDate, analyticsEndDate]);
-
+  
   async function handleExportCSV() {
     try {
       const res = await API.get('/admin/users/export', { responseType: 'blob' });
@@ -276,7 +288,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'audit') loadAuditLogs();
   }, [tab, logFilterUser, logFilterAction, logStartDate, logEndDate, logSearch, logPage]);
-
+  
   useEffect(() => {
     if (tab !== 'safety') return;
     async function loadSafety() {
@@ -287,19 +299,19 @@ export default function AdminDashboard() {
     }
     loadSafety();
   }, [tab]);
-
+  
   useEffect(() => {
     if (tab !== 'appeals') return;
     API.get('/admin/appeals').then(({ data }) => setAppeals(data)).catch(() => {});
   }, [tab]);
-
+  
   useEffect(() => {
     if (tab !== 'forum') return;
     API.get('/forum?flagged=true')
       .then(({ data }) => setFlaggedPosts(data.posts || []))
       .catch(() => {});
   }, [tab]);
-
+  
   async function handleApproveContent(id) {
     try {
       await API.put(`/safety/${id}/approve`);
@@ -352,7 +364,7 @@ export default function AdminDashboard() {
     fontFamily: "'DM Sans', sans-serif",
     transition: 'color 0.2s',
   });
-
+  
   return (
     <div className="dash-page">
 
@@ -441,22 +453,25 @@ export default function AdminDashboard() {
           <button style={TAB_STYLE('audit')} onClick={() => setTab('audit')}>
             {t.auditLogs}
           </button>
+          <button style={TAB_STYLE('performance')} onClick={() => setTab('performance')}>
+            📈 Responder Stats
+          </button>
           <button style={TAB_STYLE('map')} onClick={() => setTab('map')}>
             🗺️ Incident Map
-          </button>
+           </button>
           <button style={TAB_STYLE('analytics')} onClick={() => setTab('analytics')}>
             📊 Analytics
           </button>
           <button style={TAB_STYLE('safety')} onClick={() => setTab('safety')}>
             Safety Content {pendingSafety.length > 0 && (
               <span style={{ marginLeft:4, background:'#f4820a', color:'#fff', borderRadius:999, fontSize:'0.65rem', padding:'1px 6px' }}>
-                {pendingSafety.length}
+                 {pendingSafety.length}
               </span>
             )}
           </button>
           <button style={TAB_STYLE('appeals')} onClick={() => setTab('appeals')}>
             ⚖️ Appeals {appeals.length > 0 && (
-              <span style={{ marginLeft:4, background:'#e63c2f', color:'#fff', borderRadius:999, fontSize:'0.65rem', padding:'1px 6px' }}>
+               <span style={{ marginLeft:4, background:'#e63c2f', color:'#fff', borderRadius:999, fontSize:'0.65rem', padding:'1px 6px' }}>
                 {appeals.length}
               </span>
             )}
@@ -470,6 +485,9 @@ export default function AdminDashboard() {
                 {flaggedPosts.length}
               </span>
             )}
+          </button>
+          <button style={TAB_STYLE('security')} onClick={() => setTab('security')}>
+            🔒 Security
           </button>
         </div>
 
@@ -496,7 +514,7 @@ export default function AdminDashboard() {
                   <span style={{ fontSize:'0.75rem', color:'var(--text-dim)', marginLeft:'auto' }}>
                     Last updated: {new Date(health.timestamp).toLocaleTimeString()}
                   </span>
-                </div>
+                 </div>
 
                 {/* Stats grid */}
                 <div className="stat-grid" style={{ marginBottom:'1.5rem' }}>
@@ -528,7 +546,7 @@ export default function AdminDashboard() {
 
                   <div style={{ marginBottom:'1rem' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'0.3rem' }}>
-                      <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>System Memory</span>
+                       <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>System Memory</span>
                       <span style={{ fontSize:'0.78rem', color:'var(--text-primary)' }}>
                         {health.memory.systemUsedPercent}% used ({health.memory.systemTotalGB}GB total, {health.memory.systemFreeGB}GB free)
                       </span>
@@ -542,11 +560,11 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div style={{ display:'flex', justifyContent:'space-between' }}>
+                   <div style={{ display:'flex', justifyContent:'space-between' }}>
                     <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Node.js Process Heap</span>
                     <span style={{ fontSize:'0.78rem', color:'var(--text-primary)' }}>
                       {health.memory.processUsedMB}MB / {health.memory.processTotalMB}MB
-                    </span>
+                     </span>
                   </div>
                 </div>
 
@@ -561,11 +579,51 @@ export default function AdminDashboard() {
                     <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Load Average (1m, 5m, 15m)</span>
                     <span style={{ fontSize:'0.78rem', color:'var(--text-primary)', fontFamily:'monospace' }}>
                       {health.cpu.loadAverage.map(l => l.toFixed(2)).join(', ')}
-                    </span>
+                     </span>
                   </div>
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* ── Performance (Responder Stats) Tab ────────────────── */}
+        {!loading && tab === 'performance' && (
+          <div>
+            <div className="section-label" style={{ marginBottom:'1rem' }}>Responder Performance</div>
+            {responderStats.length === 0 && (
+              <div className="empty-state"><div className="empty-state-icon">📈</div><div>No responders found.</div></div>
+            )}
+            {responderStats.map((r, i) => (
+              <div key={r._id} className="card-sm" style={{ marginBottom:'0.5rem', display:'flex', alignItems:'center', gap:'0.85rem' }}>
+                <div style={{
+                  width:24, height:24, borderRadius:'50%', flexShrink:0,
+                  background: i===0?'#f4820a':i===1?'#888':'#1e1e1e',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:'0.72rem', fontWeight:800, color:'#fff',
+                }}>{i+1}</div>
+                <div style={{ flex:1 }}>
+                  <Link to={`/admin/users/${r._id}`} style={{ textDecoration:'none' }}>
+                    <div style={{ fontSize:'0.85rem', fontWeight:600, color:'#f0ede8' }}>{r.name}</div>
+                    <div style={{ fontSize:'0.72rem', color:'#555' }}>{r.email}</div>
+                  </Link>
+                </div>
+                <div className="stat-grid" style={{ flex:2, marginBottom:0 }}>
+                  <div className="stat-card" style={{ padding:'0.4rem 0.6rem' }}>
+                    <div className="stat-label">Handled</div>
+                    <div className="stat-value" style={{ fontSize:'1rem' }}>{r.handled}</div>
+                  </div>
+                  <div className="stat-card" style={{ padding:'0.4rem 0.6rem' }}>
+                    <div className="stat-label">Resolved</div>
+                    <div className="stat-value" style={{ fontSize:'1rem', color:'#22c55e' }}>{r.resolved}</div>
+                  </div>
+                  <div className="stat-card" style={{ padding:'0.4rem 0.6rem' }}>
+                    <div className="stat-label">Rate</div>
+                    <div className="stat-value" style={{ fontSize:'1rem', color:'#3b82f6' }}>{r.resolutionRate}%</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -597,7 +655,7 @@ export default function AdminDashboard() {
             <SkeletonCard lines={3} />
             <SkeletonCard lines={3} />
             <SkeletonCard lines={3} />
-          </>
+           </>
         )}
 
         {/* ── Users Tab ────────────────────────────────────────── */}
@@ -610,11 +668,11 @@ export default function AdminDashboard() {
                   <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.15rem' }}>
                     <div style={{ fontWeight:600, fontSize:'0.875rem', color:'var(--text-primary)' }}>
                       {u.name}
-                    </div>
+                     </div>
                     {u.isBanned && (
                       <span style={{ fontSize:'0.65rem', padding:'0.1rem 0.5rem', background:'rgba(127,29,29,0.2)', color:'#f87c74', borderRadius:999, fontWeight:600 }}>
                         ⛔ BANNED
-                      </span>
+                       </span>
                     )}
                     {!u.isBanned && u.isRestricted && (
                       <span style={{ fontSize:'0.65rem', padding:'0.1rem 0.5rem', background:'rgba(230,60,47,0.12)', color:'#e63c2f', borderRadius:999, fontWeight:600 }}>
@@ -653,7 +711,7 @@ export default function AdminDashboard() {
                   >
                     {['user','responder','admin'].map(r => (
                       <option key={r} value={r}>{r}</option>
-                    ))}
+                     ))}
                   </select>
                   {u.isBanned && u._id !== user?._id && (
                     <button
@@ -676,6 +734,105 @@ export default function AdminDashboard() {
                 </div>
               </div>
             ))}
+            {tab === 'security' && (
+              <div>
+                <div className="section-label" style={{ marginBottom:'1rem' }}>Security Checklist</div>
+                {[
+                  { label:'Helmet headers enabled',         check: true,  detail:'Content-Security-Policy, X-Frame-Options, etc.' },
+                  { label:'Rate limiting on auth endpoints', check: true,  detail:'100 requests per 15 minutes' },
+                  { label:'Account lockout after 5 failures',check: true,  detail:'15-minute lockout window' },
+                  { label:'bcrypt password hashing',         check: true,  detail:'10 salt rounds' },
+                  { label:'JWT with 7-day expiry + refresh', check: true,  detail:'Auto-refresh at 6 days' },
+                  { label:'Email verification required',     check: true,  detail:'Blocks login until verified' },
+                  { label:'2FA available to all users',      check: true,  detail:'Email OTP on login' },
+                  { label:'Session tracking + revoke',       check: true,  detail:'Per-device session management' },
+                  { label:'Mongo injection protection',      check: true,  detail:'Custom in-place sanitizer' },
+                  { label:'HPP protection',                  check: true,  detail:'HTTP Parameter Pollution prevented' },
+                  { label:'Input validation',                check: true,  detail:'express-validator on key endpoints' },
+                  { label:'CSRF protection',                 check: true,  detail:'On OAuth routes (JWT mitigates rest)' },
+                  { label:'Anonymous report penalty',        check: true,  detail:'-15 trust score' },
+                  { label:'Reputation-based access control', check: true,  detail:'Restricted/banned users blocked from reporting' },
+                  { label:'Audit log on all admin actions',  check: true,  detail:'Full trail in audit logs tab' },
+                  { label:'GDPR data export',                check: true,  detail:'Users can download all their data' },
+                  { label:'HTTPS in production',             check: false, detail:'Configure SSL via Railway/Render or Nginx' },
+                  { label:'MongoDB Atlas IP whitelist',      check: false, detail:'Restrict to production server IP only' },
+                  { label:'Environment secrets in .env',     check: false, detail:'Never commit .env to Git' },
+                  { label:'Dependency audit',                check: false, detail:'Run: npm audit fix in /backend' },
+                ].map(({ label, check, detail }) => (
+                  <div key={label} style={{ display:'flex', alignItems:'flex-start', gap:'0.75rem', padding:'0.65rem 0', borderBottom:'1px solid #111' }}>
+                    <div style={{ fontSize:'1rem', marginTop:'0.05rem', flexShrink:0 }}>
+                      {check ? '✅' : '⚠️'}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'0.85rem', fontWeight:600, color: check ? '#f0ede8' : '#f4820a' }}>{label}</div>
+                      <div style={{ fontSize:'0.72rem', color:'#555', marginTop:'0.1rem' }}>{detail}</div>
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ marginTop:'1.25rem', background:'rgba(244,130,10,0.06)', border:'1px solid rgba(244,130,10,0.15)', borderRadius:8, padding:'0.85rem 1rem', fontSize:'0.82rem', color:'#f4820a' }}>
+                  ⚠ 3 items require action before production deployment. See Deployment guide.
+                </div>
+              </div>
+            )}
+
+            {/* ── Bulk Message Section ─────────────────────────── */}
+            <div className="card" style={{ marginTop:'1.5rem' }}>
+              <div className="section-label" style={{ marginBottom:'1rem' }}>📢 Send Bulk Message</div>
+              <div className="form-group">
+                <label className="form-label">Target Audience</label>
+                 <select className="form-select" value={bulkTarget} onChange={e => setBulkTarget(e.target.value)}>
+                  <option value="all">All Users</option>
+                  <option value="user">Citizens Only</option>
+                  <option value="responder">Responders Only</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Subject</label>
+                <input
+                  className="form-input"
+                  value={bulkSubject}
+                  onChange={e => setBulkSubject(e.target.value)}
+                  placeholder="Important announcement…"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Message</label>
+                 <textarea
+                  className="form-textarea"
+                  value={bulkMessage}
+                  onChange={e => setBulkMessage(e.target.value)}
+                  rows={4}
+                  placeholder="Your message to users…"
+                />
+              </div>
+              <button
+                className="btn-primary"
+                disabled={bulkSending}
+                onClick={async () => {
+                   if (!bulkSubject.trim() || !bulkMessage.trim()) return toast.error('Subject and message required.');
+                  if (!window.confirm(`Send this message to all ${bulkTarget === 'all' ? 'users' : bulkTarget + 's'}?`)) return;
+                  setBulkSending(true);
+                  try {
+                    const { data } = await API.post('/admin/bulk-message', {
+                      subject:    bulkSubject,
+                      message:    bulkMessage,
+                      targetRole: bulkTarget === 'all' ? null : bulkTarget,
+                      targetAll:  bulkTarget === 'all',
+                    });
+                    toast.success(data.message);
+                    setBulkSubject('');
+                    setBulkMessage('');
+                  } catch (err) {
+                    toast.error(err.response?.data?.message || 'Failed.');
+                  } finally {
+                    setBulkSending(false);
+                  }
+                }}
+              >
+                {bulkSending ? 'Sending…' : '📢 Send Message'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -702,7 +859,7 @@ export default function AdminDashboard() {
                     <button className="btn-primary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}
                       onClick={() => handleApplication(app._id, 'approve')} disabled={actionId === app._id}>
                       ✔ Approve
-                    </button>
+                     </button>
                     <button className="btn-danger" style={{ fontSize:'0.78rem' }}
                       onClick={() => {
                         const reason = window.prompt('Optional: reason for rejection (shown to applicant)');
@@ -712,7 +869,7 @@ export default function AdminDashboard() {
                       ✕ Reject
                     </button>
                   </div>
-                </div>
+                 </div>
 
                 <div className="two-col" style={{ fontSize:'0.82rem' }}>
                   <div>
@@ -722,7 +879,7 @@ export default function AdminDashboard() {
                   <div>
                     <div style={{ color:'var(--text-dim)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.2rem' }}>Preferred Station</div>
                     <div style={{ color:'var(--text-primary)' }}>{app.preferredStation}</div>
-                  </div>
+                   </div>
                   <div>
                     <div style={{ color:'var(--text-dim)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.2rem' }}>Availability</div>
                     <div style={{ color:'var(--text-primary)', textTransform:'capitalize' }}>{app.availability?.replace(/_/g, ' ')}</div>
@@ -751,7 +908,7 @@ export default function AdminDashboard() {
                       Uploaded Documents
                     </div>
                     <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
-                      {app.documents.map((doc, i) => (
+                       {app.documents.map((doc, i) => (
                         <a
                           key={i}
                           href={`http://localhost:5000/${doc.path}`}
@@ -763,12 +920,12 @@ export default function AdminDashboard() {
                             textDecoration:'none', border:'1px solid rgba(59,130,246,0.2)',
                           }}
                         >
-                          📎 {doc.type === 'id' ? 'ID Document' : 'Certification'} — {doc.filename}
+                           📎 {doc.type === 'id' ? 'ID Document' : 'Certification'} — {doc.filename}
                         </a>
                       ))}
                     </div>
                   </div>
-                )}
+                 )}
               </div>
             ))}
           </div>
@@ -789,13 +946,13 @@ export default function AdminDashboard() {
                 className="form-select"
                 value={logFilterAction}
                 onChange={e => { setLogFilterAction(e.target.value); setLogPage(1); }}
-                style={{ width:'auto', minWidth:180, marginBottom:0 }}
+                 style={{ width:'auto', minWidth:180, marginBottom:0 }}
               >
                 <option value="">All Actions</option>
                 <option value="ACCOUNT_AUTO_BANNED">Account Auto-Banned</option>
                 <option value="ACCOUNT_AUTO_RESTRICTED">Account Auto-Restricted</option>
                 <option value="MANUAL_UNBAN">Manual Unban</option>
-                <option value="MANUAL_REPUTATION_ADJUSTMENT">Reputation Adjustment</option>
+                 <option value="MANUAL_REPUTATION_ADJUSTMENT">Reputation Adjustment</option>
                 <option value="SUSPICIOUS_LOGIN_ACTIVITY">Suspicious Activity</option>
                 <option value="BULK_USER_IMPORT">Bulk User Import</option>
               </select>
@@ -829,17 +986,17 @@ export default function AdminDashboard() {
             </div>
             {auditLogs.length === 0 && (
               <div className="empty-state">
-                <div className="empty-state-icon">📜</div>
+                 <div className="empty-state-icon">📜</div>
                 <div>No audit log entries match your filters.</div>
               </div>
             )}
             {auditLogs.map(log => (
               <div key={log._id} className="card-sm" style={{ marginBottom:'0.5rem' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.75rem' }}>
+                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.75rem' }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.25rem' }}>
                       <span style={{ fontSize:'0.72rem', fontWeight:700, padding:'0.1rem 0.5rem', background:'rgba(244,130,10,0.1)', color:'#f4820a', borderRadius:4 }}>
-                        {log.action}
+                         {log.action}
                       </span>
                       <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>
                         {log.performedBy?.email || 'System'}
@@ -853,7 +1010,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
             ))}
-            {logTotalPages > 1 && (
+             {logTotalPages > 1 && (
               <div style={{ display:'flex', justifyContent:'center', gap:'0.5rem', marginTop:'1rem' }}>
                 <button className="btn-secondary" disabled={logPage===1} onClick={() => setLogPage(p => p-1)} style={{ fontSize:'0.78rem' }}>← Prev</button>
                 <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', padding:'0.4rem' }}>Page {logPage} of {logTotalPages}</span>
@@ -866,7 +1023,7 @@ export default function AdminDashboard() {
         {/* ── Map Tab ──────────────────────────────────────────────── */}
         {!loading && tab === 'map' && (
           <div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
+             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', flexWrap:'wrap', gap:'0.5rem' }}>
               <div>
                 <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:'1rem', color:'var(--text-primary)' }}>
                   System-Wide Incident Map
@@ -899,7 +1056,7 @@ export default function AdminDashboard() {
               height={520}
             />
 
-            <div className="stat-grid" style={{ marginTop:'1.25rem' }}>
+             <div className="stat-grid" style={{ marginTop:'1.25rem' }}>
               {['pending','verified','dispatched','resolved','rejected'].map(status => (
                 <div key={status} className="stat-card">
                   <div className="stat-label">{status.charAt(0).toUpperCase() + status.slice(1)}</div>
@@ -934,13 +1091,13 @@ export default function AdminDashboard() {
                 onChange={e => setAnalyticsStartDate(e.target.value)}
                 style={{ width:'auto', marginBottom:0 }}
               />
-              <span style={{ color:'var(--text-dim)', fontSize:'0.8rem' }}>to</span>
+               <span style={{ color:'var(--text-dim)', fontSize:'0.8rem' }}>to</span>
               <input
                 type="date"
                 className="form-input"
                 value={analyticsEndDate}
                 onChange={e => setAnalyticsEndDate(e.target.value)}
-                style={{ width:'auto', marginBottom:0 }}
+                 style={{ width:'auto', marginBottom:0 }}
               />
               {(analyticsStartDate || analyticsEndDate) && (
                 <button
@@ -948,12 +1105,12 @@ export default function AdminDashboard() {
                   onClick={() => { setAnalyticsStartDate(''); setAnalyticsEndDate(''); }}
                   style={{ fontSize:'0.78rem' }}
                 >
-                  Clear
+                   Clear
                 </button>
               )}
               <div style={{ marginLeft:'auto', display:'flex', gap:'0.5rem' }}>
                 <button className="btn-secondary" onClick={handleExportAnalyticsCSV} style={{ fontSize:'0.78rem' }}>
-                  ⬇ Export CSV
+                   ⬇ Export CSV
                 </button>
                 <button className="btn-secondary" onClick={handleExportAnalyticsPDF} style={{ fontSize:'0.78rem' }}>
                   ⬇ Export PDF
@@ -981,7 +1138,7 @@ export default function AdminDashboard() {
               <div className="empty-state">
                 <div className="empty-state-icon">📊</div>
                 <div>No analytics data available for the selected range.</div>
-              </div>
+               </div>
             )}
           </div>
         )}
@@ -1007,12 +1164,12 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{ display:'flex', gap:'0.5rem', flexShrink:0 }}>
                     <button className="btn-primary" style={{ fontSize:'0.78rem' }}
-                      onClick={() => handleApproveContent(item._id)}>✔ Approve</button>
+                       onClick={() => handleApproveContent(item._id)}>✔ Approve</button>
                     <button className="btn-danger" style={{ fontSize:'0.78rem' }}
                       onClick={() => handleRejectContent(item._id)}>✕ Reject</button>
                   </div>
                 </div>
-                <div style={{ fontSize:'0.82rem', color:'var(--text-muted)', lineHeight:1.65, whiteSpace:'pre-line' }}>
+                 <div style={{ fontSize:'0.82rem', color:'var(--text-muted)', lineHeight:1.65, whiteSpace:'pre-line' }}>
                   {item.body}
                 </div>
               </div>
@@ -1020,7 +1177,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ── Appeals Tab ──────────────────────────────────────────── */}
+         {/* ── Appeals Tab ──────────────────────────────────────────── */}
         {!loading && tab === 'appeals' && (
           <div>
             {appeals.length === 0 && (
@@ -1036,7 +1193,7 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{ display:'flex', gap:'0.5rem' }}>
                     <button className="btn-primary" style={{ fontSize:'0.75rem' }}
-                      onClick={async () => {
+                       onClick={async () => {
                         await API.put(`/admin/appeals/${a._id}/approve`);
                         setAppeals(prev => prev.filter(x => x._id !== a._id));
                         toast.success('Appeal approved. User unbanned.');
@@ -1062,7 +1219,7 @@ export default function AdminDashboard() {
         {/* ── Forum Tab ────────────────────────────────────────────── */}
         {!loading && tab === 'forum' && (
           <div>
-            <div className="section-label" style={{ marginBottom:'1rem' }}>Flagged Posts</div>
+             <div className="section-label" style={{ marginBottom:'1rem' }}>Flagged Posts</div>
             {flaggedPosts.length === 0 && (
               <div className="empty-state"><div className="empty-state-icon">✅</div><div>No flagged forum posts.</div></div>
             )}
@@ -1099,7 +1256,7 @@ export default function AdminDashboard() {
                     Reports: {post.reports.map(r => r.reason).join(' · ')}
                   </div>
                 )}
-              </div>
+               </div>
             ))}
           </div>
         )}

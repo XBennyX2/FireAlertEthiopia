@@ -24,15 +24,16 @@ function BoundsFitter({ incidents }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!map || !incidents || incidents.length === 0) return;
+    if (!map || map._destroyed || !incidents || incidents.length === 0) return;
 
     const valid = incidents.filter(i => i.location?.lat && i.location?.lng);
     if (valid.length === 0) return;
 
-    // Wait until the map container is fully ready
+    // Asynchronous guard timer to prevent flying transitions on unmounted/tearing DOM nodes
     const timer = setTimeout(() => {
       try {
-        if (!map.getContainer()) return;
+        // Double check instance lifecycle state before executing flight paths
+        if (!map || map._destroyed || !map.getContainer()) return;
 
         if (valid.length === 1) {
           map.setView([valid[0].location.lat, valid[0].location.lng], 15);
@@ -41,21 +42,21 @@ function BoundsFitter({ incidents }) {
 
         import('leaflet').then(L => {
           try {
+            if (!map || map._destroyed) return;
             const bounds = L.latLngBounds(
               valid.map(i => [i.location.lat, i.location.lng])
             );
             map.fitBounds(bounds, { padding: [40, 40] });
           } catch (err) {
-            // Map was unmounted before fitBounds could run — safe to ignore
+            // Map unmounted or destroyed mid-flight — safe to catch
           }
         });
       } catch (err) {
-        // Map container gone — safe to ignore
+        // Container reference stripped during unmount — safe to catch
       }
     }, 100);
 
     return () => clearTimeout(timer);
-
   }, [incidents, map]);
 
   return null;
@@ -68,7 +69,6 @@ export default function IncidentMap({ incidents = [], height = 380 }) {
     i => i.location?.lat && i.location?.lng
   );
 
-  // ── No valid incidents — show a plain placeholder, NOT a broken map ──
   if (validIncidents.length === 0) {
     return (
       <div style={{
@@ -98,9 +98,15 @@ export default function IncidentMap({ incidents = [], height = 380 }) {
       overflow:     'hidden',
       border:       '1px solid #1e1e1e',
       position:     'relative',
-      zIndex:       1,           // ← keeps map below modals and nav
+      zIndex:       1,
     }}>
+      {/* 
+        The key="incident-map-instance" forces React to completely tear down and 
+        rebuild the Map container element when mounting/remounting, avoiding 
+        reusing dirty DOM nodes that carry residual _leaflet_id values.
+      */}
       <MapContainer
+        key="incident-map-instance"
         center={defaultCenter}
         zoom={13}
         style={{ height:'100%', width:'100%' }}
@@ -177,7 +183,6 @@ export default function IncidentMap({ incidents = [], height = 380 }) {
             </Popup>
           </Marker>
         ))}
-
       </MapContainer>
     </div>
   );

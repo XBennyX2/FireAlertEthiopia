@@ -4,17 +4,21 @@ const incidentSchema = new mongoose.Schema({
   reportedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: function () { return !this.isGuest; }
   },
-  
+
+  isGuest:    { type: Boolean, default: false },
+  guestEmail: { type: String, default: '' },
+  guestPhone: { type: String, default: '' },
+
   statusHistory: [{
-  status:    { type: String },
-  timestamp: { type: Date, default: Date.now },
-  note:      { type: String, default: '' },
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-}],
-rejectionReason: { type: String, default: '' },
-resolvedAt:      { type: Date },
+    status:    { type: String },
+    timestamp: { type: Date, default: Date.now },
+    note:      { type: String, default: '' },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  }],
+  rejectionReason: { type: String, default: '' },
+  resolvedAt:      { type: Date },
 
   description: {
     type: String,
@@ -51,17 +55,16 @@ resolvedAt:      { type: Date },
     ref: 'User'
   },
   reportedAt:  { type: Date, default: Date.now },
-  resolvedAt:  { type: Date },
   isAnonymous: { type: Boolean, default: false },
 
   infoRequests: [{
-  message:    { type: String },
-  requestedBy:{ type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  requestedAt:{ type: Date, default: Date.now },
-  response:   { type: String, default: '' },
-  respondedAt:{ type: Date },
-  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-}],
+    message:     { type: String },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    requestedAt: { type: Date, default: Date.now },
+    response:    { type: String, default: '' },
+    respondedAt: { type: Date },
+    assignedTo:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  }],
 });
 
 module.exports = mongoose.model('Incident', incidentSchema);

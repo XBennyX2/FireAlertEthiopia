@@ -1,18 +1,5 @@
 const express = require('express');
 const router  = express.Router();
-
-// Middleware Imports
-const { protect }   = require('../middleware/authMiddleware');
-const { authorize } = require('../middleware/roleMiddleware');
-
-const { submitApplication, getMyApplication } = require('../controllers/adminController');
-
-// Note: these use protect only (any logged-in user), not authorize('admin')
-router.post('/applications',      protect, submitApplication);
-router.post('/bulk-message', protect, authorize('admin'), bulkMessage);
-router.get('/applications/mine',  protect, getMyApplication);
-router.get('/users/:id/detail', protect, authorize('admin'), getUserDetail);
-// Controller Imports (All consolidated here)
 const {
   getAllUsers,
   changeUserRole,
@@ -29,8 +16,24 @@ const {
   exportAnalyticsCSV,
   exportAnalyticsPDF,
   exportUsersCSV,
-  importUsersCSV
+  importUsersCSV,
+  getUserDetail,
+  bulkMessage,
+  getResponderPerformance
 } = require('../controllers/adminController');
+
+// Middleware Imports
+const { protect }   = require('../middleware/authMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
+
+const { submitApplication, getMyApplication } = require('../controllers/adminController');
+
+// Note: these use protect only (any logged-in user), not authorize('admin')
+router.post('/applications',      protect, submitApplication);
+router.post('/bulk-message', protect, authorize('admin'), bulkMessage);
+router.get('/applications/mine',  protect, getMyApplication);
+router.get('/users/:id/detail', protect, authorize('admin'), getUserDetail);
+// Controller Imports (All consolidated here)
 
 const Appeal = require('../models/Appeal');
 
@@ -101,7 +104,7 @@ router.get('/analytics/export/csv',  protect, authorize('admin'), exportAnalytic
 router.get('/analytics/export/pdf',  protect, authorize('admin'), exportAnalyticsPDF);
 router.get('/users/export',          protect, authorize('admin'), exportUsersCSV);
 router.post('/users/import',         protect, authorize('admin'), importUsersCSV);
-
+router.get('/responder-performance', protect, authorize('admin'), getResponderPerformance);
 
 // ── Public / Authenticated User Routes ────────────────────────────
 

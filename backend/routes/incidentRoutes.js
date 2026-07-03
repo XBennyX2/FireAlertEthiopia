@@ -5,12 +5,17 @@ const path       = require('path');
 const { requireActiveReputation } = require('../middleware/reputationMiddleware');
 const { protect }   = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
+const { reportGuestIncident } = require('../controllers/incidentController');
+
+// Public — no auth required
+router.post('/guest', reportGuestIncident);
 const {
   reportIncident,
   getMyIncidents,
-  getAllIncidents
+  getAllIncidents,
+  exportMyIncidents, // <-- Add this
+  getPublicFeed      // <-- Add this too!
 } = require('../controllers/incidentController');
-
 // Multer config — saves uploaded files to the /uploads folder
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -36,18 +41,28 @@ const upload = multer({
   }
 });
 
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
+
 // Routes
 // Public — no auth required
 router.get('/mine/export', protect, exportMyIncidents);
 router.get('/public', getPublicFeed);
-router.post('/',    protect, authorize('user'),                    upload.array('media', 5), reportIncident);
 router.get('/mine', protect, authorize('user'),                    getMyIncidents);
 router.get('/all',  protect, authorize('admin', 'responder'),      getAllIncidents);
+
 router.post('/',
   protect,
   authorize('user'),
-  requireActiveReputation,   // ← add this
+  requireActiveReputation,
   upload.array('media', 5),
+  validate([
+    body('description').trim().isLength({ min: 10 }).withMessage('Description must be at least 10 characters.'),
+    body('fire_type').isIn(['residential','commercial','vehicle','industrial','wildland','other']).withMessage('Invalid fire type.'),
+    body('lat').notEmpty().withMessage('Location latitude is required.').isFloat().withMessage('Latitude must be a valid number.'),
+    body('lng').notEmpty().withMessage('Location longitude is required.').isFloat().withMessage('Longitude must be a valid number.'),
+  ]),
   reportIncident
 );
+
 module.exports = router;

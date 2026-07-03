@@ -32,8 +32,14 @@ function ClickHandler({ onMapClick }) {
 function MapCenterUpdater({ position }) {
   const map = useMap();
   useEffect(() => {
-    if (position) {
-      map.setView([position.lat, position.lng], map.getZoom());
+    if (!map || map._destroyed || !position) return;
+
+    try {
+      if (map.getContainer()) {
+        map.setView([position.lat, position.lng], map.getZoom());
+      }
+    } catch (err) {
+      // Map wrapper unmounted mid-update loop — safe to catch
     }
   }, [position, map]);
   return null;
@@ -53,12 +59,16 @@ export default function MapPicker({ position, onPositionChange, height = 320 }) 
 
     const { lat, lng } = marker.getLatLng();
     const address      = await reverseGeocode(lat, lng);
-    onPositionChange({ lat, lng, address });
+    if (typeof onPositionChange === 'function') {
+      onPositionChange({ lat, lng, address });
+    }
   }, [onPositionChange]);
 
   const handleMapClick = useCallback(async (lat, lng) => {
     const address = await reverseGeocode(lat, lng);
-    onPositionChange({ lat, lng, address });
+    if (typeof onPositionChange === 'function') {
+      onPositionChange({ lat, lng, address });
+    }
   }, [onPositionChange]);
 
   return (
@@ -87,7 +97,12 @@ export default function MapPicker({ position, onPositionChange, height = 320 }) 
         📍 Drag the pin or click the map to set the exact fire location
       </div>
 
+      {/* 
+        The key forces absolute DOM cleanups and halts leaf recycling patterns 
+        when tracking dynamic visibility steps.
+      */}
       <MapContainer
+        key="map-picker-instance"
         center={[center.lat, center.lng]}
         zoom={15}
         style={{ height: '100%', width: '100%' }}

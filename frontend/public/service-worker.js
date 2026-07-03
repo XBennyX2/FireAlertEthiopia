@@ -12,7 +12,7 @@ const PRECACHE_URLS = [
 // ── Install — cache the app shell ──────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
   self.skipWaiting();
 });
@@ -20,66 +20,52 @@ self.addEventListener('install', (event) => {
 // ── Activate — clean up old cache versions ─────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
+    caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
       )
     )
   );
   self.clients.claim();
 });
 
-// ── Fetch — Stale-While-Revalidate for app assets, Network-First for SPA routes ──
+// ── Fetch — Stale-While-Revalidate & SPA Fallback ──────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Never cache API calls or external maps
+  // 1. Ignore API calls and external services
   if (request.url.includes('/api/') || request.url.includes('nominatim.openstreetmap.org')) {
     return;
   }
 
-  if (request.method !== 'GET') {
-    return;
-  }
+  // 2. Only handle GET requests
+  if (request.method !== 'GET') return;
 
-  // CRITICAL FIX 1: SPA Router Offline Fallback
-  // If the user refreshes on an internal client route (e.g., /dashboard), 
-  // intercept it immediately and serve the cached index.html shell.
+  // 3. SPA Router Offline Fallback
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .catch(() => {
-          return caches.match('/index.html');
-        })
+      fetch(request).catch(() => caches.match('/index.html'))
     );
     return;
   }
 
-  // Cache-First strategy with passive background updating for asset chunks
+  // 4. Stale-While-Revalidate for app assets
   event.respondWith(
-    caches.match(request).then(cachedResponse => {
-      if (cachedResponse) {
-        // Fetch a fresh copy in the background to update the cache
-        fetch(request).then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
-          }
-        }).catch(() => {/* Ignore background network failures */});
+    caches.match(request).then((cachedResponse) => {
+      const fetchPromise = fetch(request).then((networkResponse) => {
+        // Only cache successful responses
+        if (networkResponse?.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+        }
+        return networkResponse;
+      }).catch(() => {
+        // Silently fail background updates
+      });
 
-        return cachedResponse;
-      }
-
-      return fetch(request)
-        .then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200 && request.url.startsWith(self.location.origin)) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
-          }
-          return networkResponse;
-        });
+      return cachedResponse || fetchPromise;
     })
   );
 });
@@ -87,24 +73,38 @@ self.addEventListener('fetch', (event) => {
 // ── Background Sync — triggers when connection is restored ───────
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-offline-reports') {
-    // CRITICAL FIX 2: Correctly chain waitUntil to avoid early worker termination
     event.waitUntil(
-      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
         if (clients.length === 0) {
-          // No open windows to take action. Rejecting lets the browser retry later
-          throw new Error('No active clients available to execute sync.');
+          throw new Error('No active clients to execute sync.');
         }
         
-        const broadcastPromises = clients.map(client => {
-          return new Promise((resolve) => {
-            // Setup a message channel to verify receipt if needed, or simply post
-            client.postMessage({ type: 'TRIGGER_SYNC' });
-            resolve();
-          });
-        });
-        
-        return Promise.all(broadcastPromises);
+        return Promise.all(
+          clients.map((client) => client.postMessage({ type: 'TRIGGER_SYNC' }))
+        );
       })
     );
   }
+});
+
+// ── Push Notifications ──────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  const data = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'FireAlert', {
+      body: data.body || 'You have a new update.',
+      icon: '/logo192.png',
+      badge: '/logo192.png',
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+// ── Notification Interaction ────────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow(event.notification.data?.url || '/')
+  );
 });

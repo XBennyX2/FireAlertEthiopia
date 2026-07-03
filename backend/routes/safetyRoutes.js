@@ -5,7 +5,7 @@ const { authorize } = require('../middleware/roleMiddleware');
 const {
   getPublicContent, getPendingContent, getMyContent,
   createContent, updateContent, approveContent,
-  rejectContent, togglePin, deleteContent,
+  rejectContent, togglePin, deleteContent, recordView,
 } = require('../controllers/safetyController');
 
 router.get('/',                   getPublicContent);   // public

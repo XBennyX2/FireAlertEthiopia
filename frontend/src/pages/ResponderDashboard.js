@@ -174,6 +174,13 @@ export default function ResponderDashboard() {
   const [showMap,           setShowMap]           = useState(true);
   const [trackingIncidentId, setTrackingIncidentId] = useState(null);
   const [actionNotes,       setActionNotes]       = useState({});
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    API.get('/messages/unread-count')
+      .then(({ data }) => setUnreadMessages(data.count))
+      .catch(() => {});
+  }, []);
 
   const ACTION_LABELS = {
     verify:   { label: t.verify,   style: 'btn-action'  },
@@ -254,6 +261,19 @@ export default function ResponderDashboard() {
           <span className="dash-topbar-logo-text">{t.appName}</span>
         </Link>
         <div className="dash-topbar-right">
+          <Link to="/messages" className="btn-secondary" style={{ fontSize:'0.78rem', position:'relative' }}>
+            💬 Messages
+            {unreadMessages > 0 && (
+              <span style={{
+                position:'absolute', top:-6, right:-6,
+                background:'#e63c2f', color:'#fff',
+                borderRadius:999, fontSize:'0.6rem',
+                padding:'1px 5px', fontWeight:700,
+              }}>
+                {unreadMessages}
+              </span>
+            )}
+          </Link>
           <LanguageSwitcher />
           <Link
             to="/profile"

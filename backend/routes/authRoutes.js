@@ -1,10 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const jwt     = require('jsonwebtoken');
-const {
-  register, login, verifyEmail,
-  resendVerificationCode, logout,
-} = require('../controllers/authController');
+
 const {
   forgotPassword,
   verifyResetToken,
@@ -14,7 +11,6 @@ const { protect } = require('../middleware/authMiddleware');
 const User    = require('../models/User');
 const Session = require('../models/Session');
 const passport = require('../config/passport');
-const jwt      = require('jsonwebtoken');
 const {
   register, login, verifyEmail, resendVerificationCode, logout,
   enableTwoFactor, confirmTwoFactor, disableTwoFactor,
@@ -203,6 +199,63 @@ router.get('/google/callback',
       res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
     }
   }
+);
+
+const PushSubscription = require('../models/PushSubscription');
+
+// POST /api/auth/push-subscribe
+router.post('/push-subscribe', protect, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription) return res.status(400).json({ message: 'Subscription object required.' });
+
+    await PushSubscription.findOneAndUpdate(
+      { userId: req.user._id, 'subscription.endpoint': subscription.endpoint },
+      { userId: req.user._id, subscription },
+      { upsert: true, new: true }
+    );
+
+    res.json({ message: 'Push subscription saved.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// DELETE /api/auth/push-subscribe
+router.delete('/push-subscribe', protect, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    await PushSubscription.deleteMany({ userId: req.user._id, 'subscription.endpoint': endpoint });
+    res.json({ message: 'Unsubscribed.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// GET VAPID public key (frontend needs this to subscribe)
+router.get('/push-key', (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+const { body }   = require('express-validator');
+const validate   = require('../middleware/validate');
+
+router.post('/register',
+  validate([
+    body('name').trim().notEmpty().withMessage('Name is required.').isLength({ max: 100 }).withMessage('Name too long.'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required.'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters.'),
+    body('phone').optional().isMobilePhone().withMessage('Invalid phone number.'),
+  ]),
+  register
+);
+
+router.post('/login',
+  validate([
+    body('email').isEmail().normalizeEmail().withMessage('Valid email required.'),
+    body('password').notEmpty().withMessage('Password is required.'),
+  ]),
+  login
 );
 
 module.exports = router;

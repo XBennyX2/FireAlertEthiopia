@@ -335,8 +335,21 @@ export default function LandingPage() {
           ) : (
             <Link to="/register" style={S.ctaPrimary}>{t.reportFire}</Link>
           )}
+
+          {!user && (
+            <Link to="/report-guest" style={S.ctaPrimary}>
+              🚨 Report a Fire Now
+            </Link>
+          )}
+
           <Link to="/safety" style={S.ctaSecondary}>{t.learnSafety}</Link>
         </div>
+
+        {!user && (
+          <p style={{ fontSize: '0.78rem', color: '#666', marginTop: '0.75rem' }}>
+            No account needed — just your email and phone number.
+          </p>
+        )}
       </section>
 
       {/* ── How It Works ───────────────────────────────────────── */}
@@ -364,7 +377,7 @@ export default function LandingPage() {
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             {!user && (
-              <Link to="/register" style={S.ctaPrimary}>={t.createAccount}</Link>
+              <Link to="/register" style={S.ctaPrimary}>{t.createAccount}</Link>
             )}
             <Link to="/safety" style={S.ctaSecondary}>{t.safetyTips}</Link>
           </div>

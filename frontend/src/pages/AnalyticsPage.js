@@ -10,7 +10,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 
-// Status → chart color
 const STATUS_COLORS = {
   pending:    '#f4820a',
   verified:   '#3b82f6',
@@ -25,56 +24,83 @@ export default function AnalyticsPage() {
   const navigate = useNavigate();
 
   const FALLBACK_PIE  = [{ name: t.noData || 'No Data', value: 1 }];
-  const FALLBACK_LINE = [{ month: '—', count: 0 }];
+  const FALLBACK_LINE = [{ month: '—', actual: 0, aiTrend: 0 }];
 
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
-  // Also load AI trend data if the AI service is running
   const [aiTrends,  setAiTrends]  = useState(null);
   const [aiHeatmap, setAiHeatmap] = useState(null);
+  
 
   useEffect(() => {
-    async function load() {
+    let isMounted = true;
+
+    async function loadMainData() {
       try {
         const { data: analytics } = await API.get('/admin/analytics');
-        setData(analytics);
+        if (isMounted) setData(analytics);
       } catch (err) {
-        setError('Could not load analytics data.');
+        if (isMounted) setError('Could not load analytics data.');
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
+    }
 
-      // AI service data — load independently so a failure doesn't break the page
+    async function loadAiData() {
       try {
         const [trendRes, heatRes] = await Promise.all([
           fetch('http://localhost:5001/api/ai/trends'),
           fetch('http://localhost:5001/api/ai/heatmap'),
         ]);
+        
+        if (!trendRes.ok || !heatRes.ok) return;
+
         const trendJson = await trendRes.json();
         const heatJson  = await heatRes.json();
-        setAiTrends(trendJson);
-        setAiHeatmap(heatJson);
+        
+        if (isMounted) {
+          setAiTrends(trendJson);
+          setAiHeatmap(heatJson);
+        }
       } catch {
-        // AI service may not be running — silently skip
+        // AI service offline — silently skip
       }
     }
-    load();
-  }, [t.noData]);
 
-  // ── Build chart data from API response ───────────────────────────
-  const pieData = data?.byStatus
-    ? Object.entries(data.byStatus).map(([name, value]) => ({ name, value }))
+    loadMainData();
+    loadAiData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // ── Normalize API naming conventions (CamelCase & SnakeCase fallback) ──
+  const totalIncidents     = data?.totalIncidents ?? data?.total ?? '—';
+  const avgResponseMinutes = data?.avgResponseMinutes ?? data?.avgResponseTimeMinutes ?? '—';
+  const totalUsers         = data?.totalUsers ?? '—';
+  const byStatus           = data?.byStatus ?? {};
+  const byMonth            = data?.byMonth  ?? {};
+
+  // ── Build Chart Datasets ───────────────────────────────────────
+  const pieData = Object.keys(byStatus).length > 0
+    ? Object.entries(byStatus).map(([name, value]) => ({ name, value }))
     : FALLBACK_PIE;
 
-  const lineData = data?.byMonth
-    ? Object.entries(data.byMonth).map(([month, count]) => ({ month, count }))
-    : FALLBACK_LINE;
+  const monthsSet = new Set([
+    ...Object.keys(byMonth),
+    ...Object.keys(aiTrends?.monthly_trends || {})
+  ]);
 
-  const aiLineData = aiTrends?.monthly_trends
-    ? Object.entries(aiTrends.monthly_trends).map(([month, count]) => ({ month, count }))
-    : null;
+  const combinedLineData = monthsSet.size > 0
+    ? Array.from(monthsSet).map(month => ({
+        month,
+        actual: byMonth[month] ?? 0,
+        aiTrend: aiTrends?.monthly_trends?.[month] ?? undefined,
+      }))
+    : FALLBACK_LINE;
 
   return (
     <div className="dash-page">
@@ -107,32 +133,34 @@ export default function AnalyticsPage() {
         {loading && <div className="loading-state">{t.loading}</div>}
         {error   && <div className="loading-state" style={{ color:'#f87c74' }}>{error}</div>}
 
-        {!loading && (
+        {!loading && !error && (
           <>
             {/* ── Stat Cards ─────────────────────────────────── */}
             <div className="stat-grid">
               <div className="stat-card">
                 <div className="stat-label">{t.totalIncidents}</div>
-                <div className="stat-value stat-accent">{data?.totalIncidents ?? '—'}</div>
+                <div className="stat-value stat-accent">{totalIncidents}</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">{t.resolved}</div>
-                <div className="stat-value">{data?.byStatus?.resolved ?? '—'}</div>
+                <div className="stat-value">{byStatus?.resolved ?? '—'}</div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">{t.avgResponse}</div>
-                <div className="stat-value">{data?.avgResponseMinutes ?? '—'}</div>
+                <div className="stat-label">{t.avgResponse || 'Avg Response Time'}</div>
+                <div className="stat-value">
+                  {avgResponseMinutes === '—' ? '—' : `${avgResponseMinutes} min`}
+                </div>
               </div>
               <div className="stat-card">
-                <div className="stat-label">{t.activeUsers}</div>
-                <div className="stat-value">{data?.totalUsers ?? '—'}</div>
+                <div className="stat-label">{t.activeUsers || 'Active Users'}</div>
+                <div className="stat-value">{totalUsers}</div>
               </div>
             </div>
 
             {/* ── Charts Row ────────────────────────────────── */}
             <div className="two-col" style={{ gap:'1.5rem', marginBottom:'2rem' }}>
 
-              {/* Pie chart — incidents by status */}
+              {/* Pie Chart — Incidents by Status */}
               <div className="card">
                 <div className="section-label" style={{ marginBottom:'1rem' }}>{t.byStatus}</div>
                 <ResponsiveContainer width="100%" height={220}>
@@ -170,11 +198,11 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Line chart — incidents over time */}
+              {/* Line Chart — Incidents & AI Trends Timeline */}
               <div className="card">
                 <div className="section-label" style={{ marginBottom:'1rem' }}>{t.overTime}</div>
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={aiLineData || lineData} margin={{ top:5, right:10, left:-20, bottom:5 }}>
+                  <LineChart data={combinedLineData} margin={{ top:5, right:10, left:-20, bottom:5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" />
                     <XAxis dataKey="month" tick={{ fontSize:10, fill:'#555' }} />
                     <YAxis tick={{ fontSize:10, fill:'#555' }} />
@@ -184,12 +212,25 @@ export default function AnalyticsPage() {
                     />
                     <Line
                       type="monotone"
-                      dataKey="count"
+                      dataKey="actual"
+                      name={t.actualData || "Actual"}
                       stroke="#f4820a"
                       strokeWidth={2}
                       dot={{ fill:'#f4820a', r:3 }}
                       activeDot={{ r:5 }}
                     />
+                    {aiTrends && (
+                      <Line
+                        type="monotone"
+                        dataKey="aiTrend"
+                        name={t.aiPrediction || "AI Trend"}
+                        stroke="#a855f7"
+                        strokeWidth={2}
+                        strokeDasharray="4 4"
+                        dot={{ fill:'#a855f7', r:3 }}
+                        activeDot={{ r:5 }}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -228,25 +269,25 @@ export default function AnalyticsPage() {
               <div style={{ marginBottom:'2rem' }}>
                 <div className="section-label">{t.fireTypeBreakdown}</div>
                 <div className="card">
-                  {Object.entries(aiTrends.fire_type_distribution).map(([type, count]) => {
-                    const total = Object.values(aiTrends.fire_type_distribution).reduce((a,b) => a+b, 0);
-                    const pct   = total > 0 ? Math.round((count/total)*100) : 0;
-                    
-                    // Match localized labels like t.fireTypes.residential
-                    const localizedTypeLabel = t.fireTypes?.[type] || type;
+                  {(() => {
+                    const total = Object.values(aiTrends.fire_type_distribution).reduce((a, b) => a + b, 0);
+                    return Object.entries(aiTrends.fire_type_distribution).map(([type, count]) => {
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                      const localizedTypeLabel = t.fireTypes?.[type] || type;
 
-                    return (
-                      <div key={type} style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'0.75rem' }}>
-                        <span style={{ width:120, fontSize:'0.78rem', color:'var(--text-muted)', textTransform:'capitalize', flexShrink:0 }}>
-                          {localizedTypeLabel}
-                        </span>
-                        <div style={{ flex:1, height:6, background:'#1e1e1e', borderRadius:99, overflow:'hidden' }}>
-                          <div style={{ height:'100%', width:`${pct}%`, background:'linear-gradient(90deg,#e63c2f,#f4820a)', borderRadius:99, transition:'width 0.6s' }} />
+                      return (
+                        <div key={type} style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'0.75rem' }}>
+                          <span style={{ width:120, fontSize:'0.78rem', color:'var(--text-muted)', textTransform:'capitalize', flexShrink:0 }}>
+                            {localizedTypeLabel}
+                          </span>
+                          <div style={{ flex:1, height:6, background:'#1e1e1e', borderRadius:99, overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:`${pct}%`, background:'linear-gradient(90deg,#e63c2f,#f4820a)', borderRadius:99, transition:'width 0.6s' }} />
+                          </div>
+                          <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', width:30, textAlign:'right' }}>{count}</span>
                         </div>
-                        <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', width:30, textAlign:'right' }}>{count}</span>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}

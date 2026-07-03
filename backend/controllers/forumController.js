@@ -26,10 +26,17 @@ const upload = multer({
   }
 }).single('image');
 
+const uploadMiddleware = (req, res, next) => {
+  upload(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message });
+    next();
+  });
+};
+
 const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 // ── GET /api/forum — get all posts ───────────────────────────────
-const getAllPosts = async (req, res) => {
+const getPosts = async (req, res) => {
   try {
     const { category, search, page = 1, limit = 20, flagged } = req.query;
     const query = { isRemoved: false };
@@ -79,39 +86,35 @@ const getPost = async (req, res) => {
 
 // ── POST /api/forum — create post ────────────────────────────────
 // ── POST /api/forum — create post ────────────────────────────────
-const createPost = (req, res) => {
-  upload(req, res, async (err) => {
-    if (err) return res.status(400).json({ message: err.message });
+const createPost = async (req, res) => {
+  const { title, content, category } = req.body;
 
-    const { title, content, category } = req.body;
+  if (!title?.trim() || !content?.trim()) {
+    return res.status(400).json({ message: 'Title and content are required' });
+  }
+  if (title.length > 200) {
+    return res.status(400).json({ message: 'Title must be under 200 characters' });
+  }
 
-    if (!title?.trim() || !content?.trim()) {
-      return res.status(400).json({ message: 'Title and content are required' });
-    }
-    if (title.length > 200) {
-      return res.status(400).json({ message: 'Title must be under 200 characters' });
-    }
+  try {
+    // Normalize path for web usage (handling Windows backslashes if necessary)
+    const imagePath = req.file ? req.file.path.replace(/\\/g, '/') : '';
 
-    try {
-      // Normalize path for web usage (handling Windows backslashes if necessary)
-      const imagePath = req.file ? req.file.path.replace(/\\/g, '/') : '';
+    const post = await ForumPost.create({
+      author:   req.user._id,
+      title:    title.trim(),
+      content:  content.trim(),
+      category: category || 'general',
+      image:    imagePath, // Set correct field in ForumPost schema
+    });
 
-      const post = await ForumPost.create({
-        author:   req.user._id,
-        title:    title.trim(),
-        content:  content.trim(),
-        category: category || 'general',
-        imageUrl: imagePath, // Ensure this matches your Schema field name
-      });
+    const populated = await ForumPost.findById(post._id)
+      .populate('author', 'name profilePhoto reputationScore');
 
-      const populated = await ForumPost.findById(post._id)
-        .populate('author', 'name profilePhoto reputationScore');
-
-      res.status(201).json(populated);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  });
+    res.status(201).json(populated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 // ── PUT /api/forum/:id — edit post ───────────────────────────────
 const editPost = async (req, res) => {
@@ -398,7 +401,7 @@ const addReply = async (req, res) => {
 };
 
 module.exports = {
-  getAllPosts,
+  getPosts,
   getPost,
   createPost,
   editPost,
@@ -410,4 +413,5 @@ module.exports = {
   flagPost,
   verifyPost,
   reportPost,
+  upload: uploadMiddleware,
 };

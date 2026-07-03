@@ -176,7 +176,7 @@ export default function RegisterPage() {
               className={`form-input ${errors.phone ? 'error' : ''}`}
               placeholder="09xx xxx xxx"
               value={phone}
-              onChange={e => setPhone(e.target.value)}
+              onChange={e => setPhone(e.target.value.replace(/[^0-9+\-\s]/g, ''))}
               autoComplete="tel"
             />
             {errors.phone && <span className="form-error">{errors.phone}</span>}

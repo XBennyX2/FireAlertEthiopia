@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import 'leaflet.heat';
 import '../leafletIconFix';
 
 export default function AdminIncidentMap({ incidents, height = 520 }) {
@@ -20,76 +24,71 @@ export default function AdminIncidentMap({ incidents, height = 520 }) {
   };
 
   useEffect(() => {
-    if (mapInstance.current) return;
-    mapInstance.current = L.map(mapRef.current, { zoomControl: true }).setView([9.03, 38.74], 12);
+    if (mapInstance.current) return; // already initialized
+    
+    const container = mapRef.current;
+    if (!container) return;
+
+    // Guard against Leaflet re-init on the same dirty container node
+    if (container._leaflet_id) return;
+
+    mapInstance.current = L.map(container, { zoomControl: true }).setView([9.03, 38.74], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(mapInstance.current);
+
+    // Explicit cleanup lifecycle to destroy instances fully on unmount
+    return () => {
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
     const map = mapInstance.current;
     if (!map || !incidents.length) return;
 
-    // Clear existing layers
-    Object.values(layersRef.current).forEach(l => { try { map.removeLayer(l); } catch {} });
+    // Clear existing layers safely
+    Object.values(layersRef.current).forEach(l => { 
+      try { if (l && map.hasLayer(l)) map.removeLayer(l); } catch (err) {} 
+    });
     layersRef.current = {};
 
     const validIncidents = incidents.filter(i => i.location?.lat && i.location?.lng);
 
     if (showHeatmap) {
-      // Heatmap layer — severity weighted
       const heatData = validIncidents.map(i => {
         const weight = i.severity === 'High' ? 1 : i.severity === 'Medium' ? 0.6 : 0.3;
         return [i.location.lat, i.location.lng, weight];
       });
-      // Use a canvas-based approach since leaflet.heat may not be available
-      // Fallback: draw colored circles at each point
-      const heatGroup = L.layerGroup();
-      validIncidents.forEach(i => {
-        const weight = i.severity === 'High' ? 1 : i.severity === 'Medium' ? 0.6 : 0.3;
-        const radius = weight * 60;
-        const opacity = weight * 0.35;
-        L.circle([i.location.lat, i.location.lng], {
-          radius,
-          color:       'transparent',
-          fillColor:   '#e63c2f',
-          fillOpacity: opacity,
-        }).addTo(heatGroup);
-      });
-      heatGroup.addTo(map);
-      layersRef.current.heat = heatGroup;
+      const heat = L.heatLayer(heatData, {
+        radius:  35,
+        blur:    20,
+        maxZoom: 15,
+        max:     1.0,
+        gradient: { 0.3:'#3b82f6', 0.6:'#f4820a', 1.0:'#e63c2f' },
+      }).addTo(map);
+      layersRef.current.heat = heat;
 
     } else if (showClusters) {
-      // Cluster markers
-      try {
-        const { MarkerClusterGroup } = require('leaflet.markercluster');
-        require('leaflet.markercluster/dist/MarkerCluster.css');
-        require('leaflet.markercluster/dist/MarkerCluster.Default.css');
-        const cluster = new MarkerClusterGroup();
-        validIncidents.forEach(i => {
-          const marker = L.circleMarker([i.location.lat, i.location.lng], {
-            radius: 7, color: STATUS_COLORS[i.status] || '#888',
-            fillColor: STATUS_COLORS[i.status] || '#888', fillOpacity: 0.85, weight: 1.5,
-          }).bindPopup(`<b>${i.fire_type}</b><br>${i.status}`);
-          cluster.addLayer(marker);
-        });
-        cluster.addTo(map);
-        layersRef.current.cluster = cluster;
-      } catch {
-        // If cluster library not available, fall back to regular markers
-        const group = L.layerGroup();
-        validIncidents.forEach(i => {
-          L.circleMarker([i.location.lat, i.location.lng], {
-            radius: 7, color: STATUS_COLORS[i.status] || '#888',
-            fillColor: STATUS_COLORS[i.status] || '#888', fillOpacity: 0.85, weight: 1.5,
-          }).bindPopup(`<b>${i.fire_type}</b><br>${i.status}`).addTo(group);
-        });
-        group.addTo(map);
-        layersRef.current.markers = group;
-      }
+      const cluster = L.markerClusterGroup();
+      validIncidents.forEach(i => {
+        L.circleMarker([i.location.lat, i.location.lng], {
+          radius:      7,
+          color:       STATUS_COLORS[i.status] || '#888',
+          fillColor:   STATUS_COLORS[i.status] || '#888',
+          fillOpacity: 0.85,
+          weight:      1.5,
+        })
+        .bindPopup(`<b style="text-transform:capitalize">${i.fire_type} fire</b><br><span style="text-transform:capitalize;color:${STATUS_COLORS[i.status]}">${i.status}</span>`)
+        .addTo(cluster);
+      });
+      cluster.addTo(map);
+      layersRef.current.cluster = cluster;
+
     } else {
-      // Default: individual pins
       const group = L.layerGroup();
       validIncidents.forEach(i => {
         L.circleMarker([i.location.lat, i.location.lng], {
@@ -106,10 +105,13 @@ export default function AdminIncidentMap({ incidents, height = 520 }) {
       group.addTo(map);
       layersRef.current.markers = group;
 
-      // Fit bounds
       if (validIncidents.length > 0) {
-        const bounds = L.latLngBounds(validIncidents.map(i => [i.location.lat, i.location.lng]));
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+        try {
+          const bounds = L.latLngBounds(validIncidents.map(i => [i.location.lat, i.location.lng]));
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+        } catch (err) {
+          // Guard against animation runs targeting unmounted instances
+        }
       }
     }
   }, [incidents, showHeatmap, showClusters]);
@@ -141,9 +143,8 @@ export default function AdminIncidentMap({ incidents, height = 520 }) {
         </button>
       </div>
 
-      {/* Map */}
+      {/* Map Element Container */}
       <div
-        key={`${showHeatmap}-${showClusters}`}
         ref={mapRef}
         style={{ height, borderRadius:10, overflow:'hidden', border:'1px solid #1e1e1e' }}
       />

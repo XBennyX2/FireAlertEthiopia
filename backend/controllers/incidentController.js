@@ -233,5 +233,67 @@ const exportMyIncidents = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const reportGuestIncident = async (req, res) => {
+  try {
+    const {
+      description, fire_type, severity,
+      location, guestEmail, guestPhone,
+    } = req.body;
 
-module.exports = { reportIncident, getMyIncidents, getAllIncidents };
+    if (!description || !fire_type || !location) {
+      return res.status(400).json({ message: 'Description, fire type, and location are required.' });
+    }
+
+    if (!guestEmail || !/\S+@\S+\.\S+/.test(guestEmail)) {
+      return res.status(400).json({ message: 'A valid email address is required.' });
+    }
+
+    if (!guestPhone || !/^[\d\s\+\-\(\)]{7,15}$/.test(guestPhone)) {
+      return res.status(400).json({ message: 'A valid phone number is required.' });
+    }
+
+    const incident = await Incident.create({
+      reportedBy:  null,
+      isGuest:     true,
+      guestEmail:  guestEmail.toLowerCase().trim(),
+      guestPhone:  guestPhone.trim(),
+      description: description.trim(),
+      fire_type,
+      severity:    severity || 'Medium',
+      location:    typeof location === 'string' ? JSON.parse(location) : location,
+      isAnonymous: false,
+      ai_trust_score: 40, // guests start lower — no reputation to verify against
+    });
+
+    // Try AI analysis but don't block if it fails
+    try {
+      const aiRes = await fetch(`${process.env.AI_SERVICE_URL || 'http://localhost:5001'}/api/ai/score-report`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description,
+          location,
+          is_anonymous: false,
+          reputation_score: 50,
+          false_report_count: 0,
+        }),
+      });
+      if (aiRes.ok) {
+        const aiData = await aiRes.json();
+        incident.ai_trust_score = aiData.trust_score || 40;
+        incident.ai_flags       = aiData.flags || [];
+        await incident.save();
+      }
+    } catch { /* AI service down — proceed without score */ }
+
+    res.status(201).json({
+      message:    'Report submitted. Responders have been notified.',
+      incidentId: incident._id,
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { reportIncident, getMyIncidents, getAllIncidents, getPublicFeed, exportMyIncidents, reportGuestIncident };

@@ -14,24 +14,32 @@ function MapUpdater({ responderPos, incidentPos }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!responderPos || !incidentPos) return;
+    if (!map || map._destroyed || !responderPos || !incidentPos) return;
 
     const timer = setTimeout(() => {
       try {
+        // Strict guard checks before running map transitions
+        if (!map || map._destroyed || !map.getContainer()) return;
+
         import('leaflet').then(L => {
-          const bounds = L.latLngBounds([
-            [responderPos.lat, responderPos.lng],
-            [incidentPos.lat,  incidentPos.lng],
-          ]);
-          map.fitBounds(bounds, { padding: [60, 60] });
+          try {
+            if (!map || map._destroyed) return;
+            const bounds = L.latLngBounds([
+              [responderPos.lat, responderPos.lng],
+              [incidentPos.lat,  incidentPos.lng],
+            ]);
+            map.fitBounds(bounds, { padding: [60, 60] });
+          } catch (err) {
+            // Map or container unmounted mid-flight — safe to catch
+          }
         });
       } catch (err) {
-        // Map unmounted — safe to ignore
+        // Component tearing down — safe to catch
       }
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [responderPos, map]);
+  }, [responderPos, map, incidentPos]);
 
   return null;
 }
@@ -48,7 +56,6 @@ export default function LiveTrackingMap({
   const [connected,     setConnected]     = useState(false);
   const socketRef       = useRef(null);
   const watchIdRef      = useRef(null);
-  const { user }        = (window.__auth__ || {});
 
   const incidentPos = incident?.location
     ? { lat: incident.location.lat, lng: incident.location.lng }
@@ -74,7 +81,6 @@ export default function LiveTrackingMap({
         const newPos = { lat: data.lat, lng: data.lng };
         setResponderPos(newPos);
 
-        // Recalculate route whenever responder moves
         if (incidentPos) {
           const routeData = await calculateRoute(
             data.lat, data.lng,
@@ -113,7 +119,6 @@ export default function LiveTrackingMap({
 
           setResponderPos({ lat, lng });
 
-          // Broadcast location to all users watching this incident
           socketRef.current?.emit('responderLocation', {
             incidentId:    incident._id,
             lat,
@@ -122,7 +127,6 @@ export default function LiveTrackingMap({
             responderName: storedUser.name || 'Responder',
           });
 
-          // Calculate route to incident
           if (incidentPos) {
             const routeData = await calculateRoute(
               lat, lng,
@@ -213,18 +217,22 @@ export default function LiveTrackingMap({
         overflow:      'hidden',
         border:        '1px solid #1e1e1e',
       }}>
+        {/* 
+          Stable MapContainer key tied to incident ID blocks node-recycling behavior,
+          wiping the underlying DOM node cleanly on structural map flips.
+        */}
         <MapContainer
+          key={`live-map-${incident._id}`}
           center={[incidentPos.lat, incidentPos.lng]}
           zoom={14}
           style={{ height:'100%', width:'100%' }}
-          key={incident._id}
+          zoomControl={true}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* Auto-fit when responder moves */}
           {responderPos && (
             <MapUpdater
               responderPos={responderPos}
@@ -232,7 +240,6 @@ export default function LiveTrackingMap({
             />
           )}
 
-          {/* Fire incident pin */}
           <Marker position={[incidentPos.lat, incidentPos.lng]} icon={fireIcon}>
             <Popup>
               <div style={{ fontFamily:'DM Sans,sans-serif', fontSize:'0.8rem' }}>
@@ -242,7 +249,6 @@ export default function LiveTrackingMap({
             </Popup>
           </Marker>
 
-          {/* Responder pin — only shown when location is known */}
           {responderPos && (
             <Marker
               position={[responderPos.lat, responderPos.lng]}
@@ -259,7 +265,6 @@ export default function LiveTrackingMap({
             </Marker>
           )}
 
-          {/* Route polyline */}
           {route && (
             <Polyline
               positions={route}
@@ -271,7 +276,6 @@ export default function LiveTrackingMap({
               }}
             />
           )}
-
         </MapContainer>
       </div>
 
@@ -287,7 +291,6 @@ export default function LiveTrackingMap({
           <div style={{ width:20, height:3, background:'#f4820a', borderRadius:2 }} /> Optimal Route
         </div>
       </div>
-
     </div>
   );
 }
