@@ -21,6 +21,7 @@ import ForumPostPage from './pages/ForumPostPage';
 import ApplyResponderPage from './pages/ApplyResponderPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import SafetyPage from './pages/SafetyPage';
+import SafetyContentPage from './pages/SafetyContentPage'; // Added import
 import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import TwoFactorPage from './pages/TwoFactorPage';
 import ServerErrorPage from './pages/ServerErrorPage';
@@ -32,11 +33,7 @@ import GuestReportPage from './pages/GuestReportPage';
 
 // Public route — no auth needed
 
-
-
 // ── M1: Skip-to-content link ─────────────────────────────────────
-// Rendered inside the Router so it's present on every page.
-// Each page's main region must have id="main-content" to receive focus.
 function SkipToContent() {
   return (
     <a
@@ -64,12 +61,9 @@ function SkipToContent() {
 }
 
 // ── M2: Announce route changes to screen readers ─────────────────
-// A visually-hidden live region that updates whenever the route changes,
-// so screen-reader users know a navigation has occurred.
 function RouteAnnouncer() {
   const location = useLocation();
 
-  // Derive a human-readable page name from the pathname
   const pageName = (() => {
     const p = location.pathname;
     if (p === '/')               return 'Home';
@@ -105,7 +99,7 @@ function RouteAnnouncer() {
         whiteSpace: 'nowrap',
       }}
     >
-      {`Navigated to ${pageName}`}
+      {`Mapsd to ${pageName}`}
     </div>
   );
 }
@@ -116,10 +110,7 @@ function App() {
       <LanguageProvider>
         <AuthProvider>
           <Router>
-            {/* ── M1: Skip link — before any nav, visible on :focus ── */}
             <SkipToContent />
-
-            {/* ── M2: Screen-reader route announcer ─────────────────── */}
             <RouteAnnouncer />
 
             <Routes>
@@ -135,7 +126,7 @@ function App() {
               <Route path="/two-factor"      element={<TwoFactorPage />} />
               <Route path="/500"             element={<ServerErrorPage />} />
               <Route path="/feed"            element={<PublicFeedPage />} />
-              <Route path="/report-guest" element={<GuestReportPage />} />
+              <Route path="/report-guest"    element={<GuestReportPage />} />
 
               {/* ── Auth-required routes ────────────────────────────── */}
               <Route path="/incidents/:id" element={
@@ -207,6 +198,12 @@ function App() {
               <Route path="/messages" element={
                 <ProtectedRoute allowedRoles={['responder', 'admin']}>
                   <MessagingPage />
+                </ProtectedRoute>
+              } />
+              {/* Added SafetyContentPage route */}
+              <Route path="/safety-content" element={
+                <ProtectedRoute allowedRoles={['responder', 'admin']}>
+                  <SafetyContentPage />
                 </ProtectedRoute>
               } />
             </Routes>

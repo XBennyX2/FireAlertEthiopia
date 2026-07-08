@@ -214,5 +214,14 @@ setTimeout(() => {
 }, nextMon - new Date());
 
 // ── Start server ────────────────────────────────────────────────────
+
+const allowed = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://localhost',
+  'capacitor://localhost',
+  'http://192.168.1.6:3000',
+];
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

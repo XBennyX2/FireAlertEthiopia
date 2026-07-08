@@ -40,8 +40,8 @@
   backdrop-filter: blur(10px);
   position: sticky;
   top: 0;
-  z-index: 50;
-  gap: 1rem;
+  z-index: 50 !important;
+  gap: 1.5rem;
 }
 
 .dash-topbar-logo {
@@ -49,6 +49,7 @@
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .dash-topbar-logo-icon {
@@ -74,6 +75,8 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .dash-role-badge {
@@ -451,6 +454,28 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
+
+/* ─── Mobile Responsiveness Media Queries ───────────────────────── */
+@media (max-width: 640px) {
+  .dash-topbar {
+    padding: 0.75rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .dash-user-name {
+    display: none; /* Safely drops the text layout name to save screen space */
+  }
+
+  .dash-topbar-logo-text {
+    font-size: 0.85rem;
+  }
+  
+  .dash-logout-btn {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem;
+  }
+}
+
 @media print {
   .dash-topbar,
   .btn-primary,

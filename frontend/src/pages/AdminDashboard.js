@@ -46,7 +46,7 @@ export default function AdminDashboard() {
   const [logPage,         setLogPage]         = useState(1);
   const [logTotalPages,   setLogTotalPages]   = useState(1);
   const [pendingSafety, setPendingSafety] = useState([]);
-  
+
   // Bulk message state
   const [bulkTarget,  setBulkTarget]  = useState('all');
   const [bulkSubject, setBulkSubject] = useState('');
@@ -55,19 +55,19 @@ export default function AdminDashboard() {
 
   // Health state
   const [health, setHealth] = useState(null);
-  
+
   // Appeals & Forum state
   const [appeals, setAppeals] = useState([]);
   const [flaggedPosts, setFlaggedPosts] = useState([]);
-  
+
   useEffect(() => { loadAll(); }, []);
   const [responderStats, setResponderStats] = useState([]);
-  
+
   useEffect(() => {
     if (tab !== 'performance') return;
     API.get('/admin/responder-performance').then(({ data }) => setResponderStats(data)).catch(() => {});
   }, [tab]);
-  
+
   async function loadAll() {
     setLoading(true);
     try {
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
     const interval = setInterval(loadHealth, 10000);
     return () => clearInterval(interval);
   }, [tab]);
-  
+
   async function loadAnalytics() {
     try {
       const params = new URLSearchParams();
@@ -157,7 +157,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'analytics') loadAnalytics();
   }, [tab, analyticsStartDate, analyticsEndDate]);
-  
+
   async function handleExportCSV() {
     try {
       const res = await API.get('/admin/users/export', { responseType: 'blob' });
@@ -288,7 +288,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'audit') loadAuditLogs();
   }, [tab, logFilterUser, logFilterAction, logStartDate, logEndDate, logSearch, logPage]);
-  
+
   useEffect(() => {
     if (tab !== 'safety') return;
     async function loadSafety() {
@@ -299,19 +299,19 @@ export default function AdminDashboard() {
     }
     loadSafety();
   }, [tab]);
-  
+
   useEffect(() => {
     if (tab !== 'appeals') return;
     API.get('/admin/appeals').then(({ data }) => setAppeals(data)).catch(() => {});
   }, [tab]);
-  
+
   useEffect(() => {
     if (tab !== 'forum') return;
     API.get('/forum?flagged=true')
       .then(({ data }) => setFlaggedPosts(data.posts || []))
       .catch(() => {});
   }, [tab]);
-  
+
   async function handleApproveContent(id) {
     try {
       await API.put(`/safety/${id}/approve`);
@@ -364,7 +364,7 @@ export default function AdminDashboard() {
     fontFamily: "'DM Sans', sans-serif",
     transition: 'color 0.2s',
   });
-  
+
   return (
     <div className="dash-page">
 
@@ -404,6 +404,7 @@ export default function AdminDashboard() {
           <span className="dash-role-badge">{t.admin}</span>
           <span className="dash-user-name">{user?.name}</span>
           <Link to="/analytics" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>📊 {t.analyticsTitle}</Link>
+          <Link to="/safety-content" className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>📝 Safety Content</Link>
           <button className="dash-logout-btn" onClick={() => { logout(); navigate('/'); }}>{t.signOut}</button>
         </div>
       </nav>
@@ -1146,6 +1147,12 @@ export default function AdminDashboard() {
         {/* ── Safety Tab ───────────────────────────────────────────── */}
         {!loading && tab === 'safety' && (
           <div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.25rem', flexWrap:'wrap', gap:'0.75rem' }}>
+              <div className="section-label">Pending Safety Content</div>
+              <Link to="/safety-content" className="btn-primary" style={{ fontSize:'0.78rem' }}>
+                + Create Safety Content
+              </Link>
+            </div>
             {pendingSafety.length === 0 && (
               <div className="empty-state">
                 <div className="empty-state-icon">✅</div>

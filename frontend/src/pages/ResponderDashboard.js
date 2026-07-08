@@ -493,14 +493,6 @@ export default function ResponderDashboard() {
                             ❓ Request Info
                           </button>
 
-                          <Link  
-                            to={`/incidents/${incident._id}`}  
-                            className="btn-secondary"  
-                            style={{ fontSize:'0.75rem', padding:'0.3rem 0.6rem', textDecoration:'none', whiteSpace:'nowrap' }}
-                          >  
-                            View Details →
-                          </Link>
-
                           {/* 🔄 Reassign Action for Admins */}
                           {user?.role === 'admin' && (
                             <button

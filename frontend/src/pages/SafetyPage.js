@@ -14,10 +14,10 @@ const CATEGORY_COLORS = {
 };
 
 const STATIC_CONTACTS = [
-  { name: 'Addis Ababa Fire & Emergency',  number: '939',      desc: 'Main fire emergency line' },
-  { name: 'Police Emergency',              number: '991',      desc: 'For law enforcement' },
-  { name: 'Ambulance / Medical',           number: '907',      desc: 'Medical emergencies' },
-  { name: 'Disaster Risk Management',      number: '011-1-23-83-87', desc: 'City disaster office' },
+  { name: 'Addis Ababa Fire & Emergency',  number: '939',           desc: 'Main fire emergency line' },
+  { name: 'Police Emergency',              number: '991',           desc: 'For law enforcement' },
+  { name: 'Ambulance / Medical',           number: '907',           desc: 'Medical emergencies' },
+  { name: 'Disaster Risk Management',      number: '+251111238387', desc: 'City disaster office' },
 ];
 
 export default function SafetyPage() {
@@ -125,21 +125,35 @@ export default function SafetyPage() {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'0.75rem' }}>
             {STATIC_CONTACTS.map(c => (
-              <div key={c.name} style={{
-                background:'rgba(230,60,47,0.06)', border:'1px solid rgba(230,60,47,0.12)',
-                borderRadius:8, padding:'0.75rem 1rem',
-              }}>
+              <a
+                key={c.name}
+                href={`tel:${c.number.replace(/[\s\-]/g, '')}`}
+                style={{ textDecoration:'none', display:'block' }}
+              >
                 <div style={{
-                  fontFamily:'monospace', fontWeight:800,
-                  fontSize:'1.25rem', color:'#e63c2f', marginBottom:'0.2rem',
-                }}>
-                  {c.number}
+                  background:'rgba(230,60,47,0.06)', border:'1px solid rgba(230,60,47,0.12)',
+                  borderRadius:8, padding:'0.75rem 1rem', height: '100%',
+                  transition: 'background 0.2s ease',
+                  cursor: 'pointer'
+                }}
+                className="contact-card-hover"
+                >
+                  <div style={{
+                    fontFamily:'monospace', fontWeight:800,
+                    fontSize:'1.25rem', color:'#e63c2f', marginBottom:'0.2rem',
+                    display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap',
+                  }}>
+                    📞 {c.number}
+                    <span style={{ fontSize:'0.65rem', color:'#f4820a', fontWeight:600, letterSpacing:'0.05em' }}>
+                      TAP TO CALL
+                    </span>
+                  </div>
+                  <div style={{ fontSize:'0.8rem', fontWeight:600, color:'#f0ede8', marginBottom:'0.15rem' }}>
+                    {c.name}
+                  </div>
+                  <div style={{ fontSize:'0.72rem', color:'#555' }}>{c.desc}</div>
                 </div>
-                <div style={{ fontSize:'0.8rem', fontWeight:600, color:'#f0ede8', marginBottom:'0.15rem' }}>
-                  {c.name}
-                </div>
-                <div style={{ fontSize:'0.72rem', color:'#555' }}>{c.desc}</div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -272,7 +286,7 @@ export default function SafetyPage() {
             🚒 What To Do If You See a Fire
           </div>
           {[
-            { step:'1', action:'Call 939 immediately.', detail:'Give your exact location, describe the fire size, and stay on the line if safe.' },
+            { step:'1', action:<>Call <a href="tel:939" style={{ color:'#e63c2f', textDecoration:'none', fontWeight:800 }}>939</a> immediately.</>, detail:'Give your exact location, describe the fire size, and stay on the line if safe.' },
             { step:'2', action:'Alert everyone nearby.', detail:'Shout clearly — do not assume others know.' },
             { step:'3', action:'Evacuate — do not use the elevator.', detail:'Crawl low if there is smoke. Close doors behind you to slow the fire.' },
             { step:'4', action:'Report via FireAlert.', detail:'Open the app and submit a report with your GPS location to help responders.' },
