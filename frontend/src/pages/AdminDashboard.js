@@ -24,6 +24,19 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'health' | 'safety' | 'appeals' | 'forum'
 
   const [users,    setUsers]    = useState([]);
+  const [stationFilter, setStationFilter] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+
+  const filteredUsers = users.filter(u => {
+    if (userRoleFilter && u.role !== userRoleFilter) return false;
+    if (stationFilter  && u.station !== stationFilter) return false;
+    if (userSearch) {
+      const q = userSearch.toLowerCase();
+      if (!u.name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
   const [apps,     setApps]     = useState([]);
   const [allIncidents, setAllIncidents] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -630,25 +643,67 @@ export default function AdminDashboard() {
 
         {/* ── Users Tab toolbar ────────────────────────────────── */}
         {!loading && tab === 'users' && (
-          <div style={{ display:'flex', gap:'0.6rem', marginBottom:'1rem', flexWrap:'wrap' }}>
-            <button className="btn-secondary" onClick={handleExportCSV} style={{ fontSize:'0.78rem' }}>
-              ⬇ Export Users CSV
-            </button>
-            <button
-              className="btn-secondary"
-              onClick={() => csvImportRef.current?.click()}
-              disabled={importing}
-              style={{ fontSize:'0.78rem' }}
-            >
-              {importing ? 'Importing…' : '⬆ Import Users CSV'}
-            </button>
-            <input
-              ref={csvImportRef}
-              type="file"
-              accept=".csv"
-              style={{ display:'none' }}
-              onChange={handleImportCSV}
-            />
+          <div>
+            <div style={{ display:'flex', gap:'0.6rem', marginBottom:'1rem', flexWrap:'wrap' }}>
+              <button className="btn-secondary" onClick={handleExportCSV} style={{ fontSize:'0.78rem' }}>
+                ⬇ Export Users CSV
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => csvImportRef.current?.click()}
+                disabled={importing}
+                style={{ fontSize:'0.78rem' }}
+              >
+                {importing ? 'Importing…' : '⬆ Import Users CSV'}
+              </button>
+              <input
+                ref={csvImportRef}
+                type="file"
+                accept=".csv"
+                style={{ display:'none' }}
+                onChange={handleImportCSV}
+              />
+            </div>
+            
+            <div style={{ display:'flex', gap:'0.6rem', marginBottom:'1.5rem', flexWrap:'wrap', alignItems:'center' }}>
+              <input
+                className="form-input"
+                placeholder="Search users by name or email..."
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                style={{ flex:1, minWidth:200, marginBottom:0 }}
+              />
+              <select
+                className="form-select"
+                value={userRoleFilter}
+                onChange={e => setUserRoleFilter(e.target.value)}
+                style={{ width:'auto', marginBottom:0 }}
+              >
+                <option value="">All Roles</option>
+                <option value="user">User</option>
+                <option value="responder">Responder</option>
+                <option value="admin">Admin</option>
+              </select>
+              <select
+                className="form-select"
+                value={stationFilter}
+                onChange={e => setStationFilter(e.target.value)}
+                style={{ width:'auto', marginBottom:0 }}
+              >
+                <option value="">All Stations</option>
+                <option value="Unassigned">⚠ Unassigned</option>
+                <option value="Bole Fire Station">Bole</option>
+                <option value="Kirkos Fire Station">Kirkos</option>
+                <option value="Yeka Fire Station">Yeka</option>
+                <option value="Arada Fire Station">Arada</option>
+                <option value="Akaki Kaliti Fire Station">Akaki Kaliti</option>
+                <option value="Nifas Silk-Lafto Fire Station">Nifas Silk-Lafto</option>
+                <option value="Gulele Fire Station">Gulele</option>
+                <option value="Lideta Fire Station">Lideta</option>
+                <option value="Kolfe Keranio Fire Station">Kolfe Keranio</option>
+                <option value="Addis Ketema Fire Station">Addis Ketema</option>
+              </select>
+            </div>
           </div>
         )}
         {loading && (
@@ -662,8 +717,8 @@ export default function AdminDashboard() {
         {/* ── Users Tab ────────────────────────────────────────── */}
         {!loading && tab === 'users' && (
           <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem' }}>
-            {users.length === 0 && <div className="empty-state"><div className="empty-state-icon">👤</div><div>{t.noUsers}</div></div>}
-            {users.map(u => (
+            {filteredUsers.length === 0 && <div className="empty-state"><div className="empty-state-icon">👤</div><div>{t.noUsers}</div></div>}
+            {filteredUsers.map(u => (
               <div key={u._id} className="card-sm" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.75rem' }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.15rem' }}>
@@ -714,6 +769,39 @@ export default function AdminDashboard() {
                       <option key={r} value={r}>{r}</option>
                      ))}
                   </select>
+                  {u.role === 'responder' && (
+  <select
+    className="form-select"
+    value={u.station || 'Unassigned'}
+    onChange={e => {
+      const newStation = e.target.value; // captured once, synchronously
+
+      API.put(`/admin/users/${u._id}/station`, { station: newStation })
+        .then(() => {
+          setUsers(prev => prev.map(usr =>
+            usr._id === u._id ? { ...usr, station: newStation } : usr
+          ));
+          toast.success(`Station updated to ${newStation}`);
+        })
+        .catch(err => {
+          toast.error(err.response?.data?.message || 'Failed to update station.');
+        });
+    }}
+    style={{ padding:'0.35rem 0.65rem', fontSize:'0.75rem', width:'auto', minWidth:160 }}
+  >
+    <option value="Unassigned">⚠ Unassigned</option>
+    <option value="Bole Fire Station">Bole</option>
+    <option value="Kirkos Fire Station">Kirkos</option>
+    <option value="Yeka Fire Station">Yeka</option>
+    <option value="Arada Fire Station">Arada</option>
+    <option value="Akaki Kaliti Fire Station">Akaki Kaliti</option>
+    <option value="Nifas Silk-Lafto Fire Station">Nifas Silk-Lafto</option>
+    <option value="Gulele Fire Station">Gulele</option>
+    <option value="Lideta Fire Station">Lideta</option>
+    <option value="Kolfe Keranio Fire Station">Kolfe Keranio</option>
+    <option value="Addis Ketema Fire Station">Addis Ketema</option>
+  </select>
+)}
                   {u.isBanned && u._id !== user?._id && (
                     <button
                       className="btn-action"

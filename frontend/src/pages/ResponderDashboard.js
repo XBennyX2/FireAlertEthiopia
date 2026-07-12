@@ -147,6 +147,9 @@ function LeaderboardTab() {
           </div>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:'0.85rem', fontWeight:600, color:'#f0ede8' }}>{r.name}</div>
+            <div style={{ fontSize:'0.7rem', color: r.station && r.station !== 'Unassigned' ? '#3b82f6' : '#555' }}>
+              {r.station && r.station !== 'Unassigned' ? `🏢 ${r.station}` : 'No station'}
+            </div>
             <div style={{ fontSize:'0.72rem', color:'#555' }}>Rep: {r.reputationScore}</div>
           </div>
           <div style={{ textAlign:'right' }}>
@@ -175,10 +178,17 @@ export default function ResponderDashboard() {
   const [trackingIncidentId, setTrackingIncidentId] = useState(null);
   const [actionNotes,       setActionNotes]       = useState({});
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [myStation, setMyStation] = useState('');
 
   useEffect(() => {
     API.get('/messages/unread-count')
       .then(({ data }) => setUnreadMessages(data.count))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    API.get('/responder/my-station')
+      .then(({ data }) => setMyStation(data.station))
       .catch(() => {});
   }, []);
 
@@ -313,6 +323,37 @@ export default function ResponderDashboard() {
 
           <span className="dash-role-badge">{t.responder}</span>
           <span className="dash-user-name">{user?.name}</span>
+          {myStation && myStation !== 'Unassigned' && (
+            <div style={{
+              display:        'flex',
+              alignItems:     'center',
+              gap:            '0.4rem',
+              padding:        '0.3rem 0.75rem',
+              background:     'rgba(59,130,246,0.1)',
+              border:         '1px solid rgba(59,130,246,0.2)',
+              borderRadius:   999,
+              fontSize:       '0.72rem',
+              color:          '#3b82f6',
+              fontWeight:     600,
+              whiteSpace:     'nowrap',
+            }}>
+              🏢 {myStation}
+            </div>
+          )}
+
+          {myStation === 'Unassigned' && (
+            <div style={{
+              padding:      '0.3rem 0.75rem',
+              background:   'rgba(244,130,10,0.08)',
+              border:       '1px solid rgba(244,130,10,0.2)',
+              borderRadius: 999,
+              fontSize:     '0.72rem',
+              color:        '#f4820a',
+              fontWeight:   600,
+            }}>
+              ⚠ No Station Assigned
+            </div>
+          )}
           <button
             className="dash-logout-btn"
             onClick={() => { logout(); navigate('/'); }}
@@ -392,6 +433,32 @@ export default function ResponderDashboard() {
                 </div>
               </div>
             </div>
+
+            {myStation && (
+              <div style={{
+                display:       'flex',
+                alignItems:    'center',
+                gap:           '1rem',
+                padding:       '0.85rem 1.1rem',
+                background:    'rgba(59,130,246,0.06)',
+                border:        '1px solid rgba(59,130,246,0.15)',
+                borderRadius:  10,
+                marginBottom:  '1.5rem',
+              }}>
+                <div style={{ fontSize:'1.75rem' }}>🏢</div>
+                <div>
+                  <div style={{ fontSize:'0.72rem', color:'#555', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.2rem' }}>
+                    Your Assigned Station
+                  </div>
+                  <div style={{ fontSize:'0.95rem', fontWeight:700, color:'#f0ede8' }}>
+                    {myStation === 'Unassigned'
+                      ? 'No station assigned yet — contact your admin'
+                      : myStation
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Overview Incident Map ────────────────────────────── */}
             {!loading && incidents.length > 0 && showMap && (

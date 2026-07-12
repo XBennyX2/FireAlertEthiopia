@@ -388,7 +388,7 @@ const getMyPerformance = async (req, res) => {
 const getLeaderboard = async (req, res) => {
   try {
     const responders = await User.find({ role: 'responder', isActive: true })
-      .select('name profilePhoto reputationScore');
+      .select('name profilePhoto reputationScore station');
 
     // Count resolved incidents per responder
     const counts = await Incident.aggregate([
@@ -406,6 +406,7 @@ const getLeaderboard = async (req, res) => {
       name:           r.name,
       profilePhoto:   r.profilePhoto,
       reputationScore:r.reputationScore,
+      station:        r.station,
       resolvedCount:  countMap[r._id.toString()] || 0,
     })).sort((a, b) => b.resolvedCount - a.resolvedCount || b.reputationScore - a.reputationScore)
       .slice(0, 20);

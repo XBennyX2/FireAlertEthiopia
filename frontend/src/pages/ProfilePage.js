@@ -18,6 +18,7 @@ function getDashboardLink(role) {
 
 // ── Responder Performance Sub-component ──────────────────────────
 function ResponderPerformanceTab() {
+  const { user } = useAuth();
   const [stats,   setStats]   = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +34,32 @@ function ResponderPerformanceTab() {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+
+      {user?.role === 'responder' && (
+        <div style={{
+          display:      'flex',
+          alignItems:   'center',
+          gap:          '0.75rem',
+          padding:      '0.85rem 1.1rem',
+          background:   'rgba(59,130,246,0.06)',
+          border:       '1px solid rgba(59,130,246,0.15)',
+          borderRadius: 10,
+          marginBottom: '1.25rem',
+        }}>
+          <div style={{ fontSize:'1.5rem' }}>🏢</div>
+          <div>
+            <div style={{ fontSize:'0.7rem', color:'#555', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.15rem' }}>
+              Assigned Station
+            </div>
+            <div style={{ fontSize:'0.9rem', fontWeight:700, color:'#f0ede8' }}>
+              {user?.station && user.station !== 'Unassigned'
+                ? user.station
+                : <span style={{ color:'#f4820a' }}>Not yet assigned — contact your admin</span>
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="card">

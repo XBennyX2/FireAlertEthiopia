@@ -3,6 +3,7 @@ const router  = express.Router();
 
 const { protect }   = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
+const User = require('../models/User');
 const {
   getIncidentQueue,
   verifyIncident,
@@ -29,5 +30,14 @@ router.get('/my-performance', protect, authorize('responder','admin'), getMyPerf
 router.get('/leaderboard', protect, authorize('responder','admin'), getLeaderboard);
 router.get('/shift',  protect, authorize('responder','admin'), getShift);
 router.put('/shift',  protect, authorize('responder','admin'), updateShift);
+// GET /api/responder/my-station
+router.get('/my-station', protect, authorize('responder', 'admin'), async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('station name');
+    res.json({ station: user.station || 'Unassigned' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 module.exports = router;

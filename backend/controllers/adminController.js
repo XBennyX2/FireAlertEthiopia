@@ -266,35 +266,31 @@ const submitApplication = (req, res) => {
 const approveApplication = async (req, res) => {
   try {
     const application = await Application.findById(req.params.id);
+    if (!application) return res.status(404).json({ message: 'Application not found' });
 
-    if (!application) {
-      return res.status(404).json({ message: 'Application not found' });
-    }
-
-    // Update application status and review metadata
-    application.status = 'approved';
+    application.status     = 'approved';
     application.reviewedBy = req.user._id;
-    application.reviewedAt = new Date();  
-    
+    application.reviewedAt = new Date();
     await application.save();
 
-    // Send real-time notification to the applicant
+    // Promote user to responder AND assign their preferred station
+    await User.findByIdAndUpdate(application.applicant, {
+      role:    'responder',
+      station: application.preferredStation || 'Unassigned',
+    });
+
+    // Notify via Socket.io
     const io = req.app.get('io');
     if (io && application.applicant) {
       io.to(application.applicant.toString()).emit('applicationApproved', {
-        message: 'Congratulations! Your responder application has been approved. You are now a fire responder.',
+        message: `Congratulations! Your application has been approved. You are now assigned to ${application.preferredStation || 'a fire station'}.`,
         incidentId: null,
       });
     }
 
-    // Promote the user to responder
-    await User.findByIdAndUpdate(application.applicant, { role: 'responder' });
+    await log(req.user._id, 'APPLICATION_APPROVED', `Approved responder application for ${application.email}, assigned to ${application.preferredStation}`);
 
-    // Log the action
-    await log(req.user._id, 'APPLICATION_APPROVED', `Approved responder application for ${application.email}`);
-
-    res.json({ message: 'Application approved. User promoted to responder.' });
-
+    res.json({ message: 'Application approved. User promoted to responder.', application });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -820,6 +816,50 @@ const bulkMessage = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+// PUT /api/admin/users/:id/station
+const assignStation = async (req, res) => {
+  try {
+    const { station } = req.body;
+
+    const validStations = [
+      'Bole Fire Station',
+      'Kirkos Fire Station',
+      'Yeka Fire Station',
+      'Arada Fire Station',
+      'Akaki Kaliti Fire Station',
+      'Nifas Silk-Lafto Fire Station',
+      'Gulele Fire Station',
+      'Lideta Fire Station',
+      'Kolfe Keranio Fire Station',
+      'Addis Ketema Fire Station',
+      'Unassigned',
+    ];
+
+    if (!validStations.includes(station)) {
+      return res.status(400).json({ message: 'Invalid station.' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.role !== 'responder') {
+      return res.status(400).json({ message: 'Station can only be assigned to responders.' });
+    }
+
+    user.station = station;
+    await user.save();
+
+    await log(
+      req.user._id,
+      'STATION_ASSIGNED',
+      `Assigned ${user.email} to ${station}`
+    );
+
+    res.json({ message: `Station updated to ${station}`, user });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   changeUserRole,
@@ -841,4 +881,5 @@ module.exports = {
   bulkMessage,          // ← add
   getUserDetail,        // ← add
   getResponderPerformance, // ← add
+  assignStation,          // ← add
 };

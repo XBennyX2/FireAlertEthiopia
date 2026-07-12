@@ -4,9 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 
 // ── Inline styles object ──────────────────────────────────────────────────────
-// Kept here to avoid a separate CSS file. Every style is intentional.
 const S = {
-  // Page wrapper
   page: {
     minHeight: '100vh',
     backgroundColor: '#0a0a0a',
@@ -20,13 +18,12 @@ const S = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '1.25rem 3rem',
-    borderBottom: '1px solid #1a1a1a',
     position: 'sticky',
     top: 0,
     backgroundColor: 'rgba(10,10,10,0.92)',
     backdropFilter: 'blur(12px)',
     zIndex: 100,
+    borderBottom: '1px solid #1a1a1a',
   },
   navLogo: {
     display: 'flex',
@@ -54,10 +51,12 @@ const S = {
   navLinks: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
+    gap: '0.5rem', 
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   navLinkGhost: {
-    padding: '0.5rem 1.1rem',
+    padding: '0.5rem 0.85rem',
     color: '#888',
     textDecoration: 'none',
     fontSize: '0.875rem',
@@ -66,7 +65,7 @@ const S = {
     transition: 'color 0.2s',
   },
   navLinkSolid: {
-    padding: '0.5rem 1.25rem',
+    padding: '0.5rem 1.1rem',
     background: 'linear-gradient(135deg, #e63c2f, #f4820a)',
     color: '#fff',
     textDecoration: 'none',
@@ -84,7 +83,6 @@ const S = {
     alignItems: 'center',
     justifyContent: 'center',
     textAlign: 'center',
-    padding: '7rem 2rem 5rem',
     position: 'relative',
   },
   heroBadge: {
@@ -105,8 +103,8 @@ const S = {
   heroTitle: {
     fontFamily: "'Syne', sans-serif",
     fontWeight: 800,
-    fontSize: 'clamp(2.5rem, 7vw, 5rem)',
-    lineHeight: 1.03,
+    fontSize: 'clamp(2.2rem, 7vw, 4.5rem)', // Tailored clamp for extra safety on small screens
+    lineHeight: 1.1,
     letterSpacing: '-0.04em',
     color: '#f0ede8',
     margin: '0 0 1.25rem',
@@ -130,6 +128,7 @@ const S = {
     gap: '0.85rem',
     flexWrap: 'wrap',
     justifyContent: 'center',
+    width: '100%', // Ensures full width utility for responsive centering
   },
   ctaPrimary: {
     padding: '0.9rem 2.25rem',
@@ -161,7 +160,6 @@ const S = {
 
   // ── Steps section ──
   steps: {
-    padding: '5rem 2rem',
     borderTop: '1px solid #1a1a1a',
     maxWidth: 960,
     margin: '0 auto',
@@ -178,7 +176,7 @@ const S = {
   stepsTitle: {
     fontFamily: "'Syne', sans-serif",
     fontWeight: 800,
-    fontSize: 'clamp(1.5rem, 3vw, 2.25rem)',
+    fontSize: 'clamp(1.5rem, 4vw, 2.25rem)',
     letterSpacing: '-0.03em',
     color: '#f0ede8',
     textAlign: 'center',
@@ -226,7 +224,6 @@ const S = {
   ctaBanner: {
     margin: '2rem auto 6rem',
     maxWidth: 700,
-    padding: '3rem 2rem',
     textAlign: 'center',
     backgroundColor: '#111',
     border: '1px solid #1e1e1e',
@@ -249,12 +246,11 @@ const S = {
   // ── Footer ──
   footer: {
     borderTop: '1px solid #1a1a1a',
-    padding: '1.5rem 3rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: '0.5rem',
+    gap: '1rem',
   },
   footerText: {
     fontSize: '0.78rem',
@@ -262,7 +258,7 @@ const S = {
   },
 };
 
-// ── Google Fonts loader (injected once) ──────────────────────────────────────
+// ── Google Fonts loader ──────────────────────────────────────────────────────
 if (!document.getElementById('landing-fonts')) {
   const link = document.createElement('link');
   link.id   = 'landing-fonts';
@@ -271,17 +267,57 @@ if (!document.getElementById('landing-fonts')) {
   document.head.appendChild(link);
 }
 
+// ── Responsive CSS Injection ──────────────────────────────────────────────────
+// This seamlessly maps responsive values to classes we apply below.
+if (!document.getElementById('responsive-styles')) {
+  const style = document.createElement('style');
+  style.id = 'responsive-styles';
+  style.innerHTML = `
+    /* Desktop Spacing */
+    .responsive-nav { padding: 1.25rem 3rem; }
+    .responsive-hero { padding: 7rem 2rem 5rem; }
+    .responsive-steps { padding: 5rem 2rem; }
+    .responsive-cta-banner { padding: 3rem 2rem; }
+    .responsive-footer { padding: 1.5rem 3rem; }
+
+    /* Mobile Adaptations */
+    @media (max-width: 768px) {
+      .responsive-nav { 
+        padding: 1rem 1.5rem; 
+        flex-direction: column; 
+        gap: 1rem;
+        align-items: center;
+      }
+      .responsive-nav-links {
+        justify-content: center !important;
+        width: 100%;
+      }
+      .responsive-hero { padding: 4rem 1.25rem 3rem; }
+      .responsive-steps { padding: 3.5rem 1.25rem; }
+      .responsive-cta-banner { padding: 2.5rem 1.25rem; margin-bottom: 4rem !important; }
+      .responsive-footer { 
+        padding: 1.5rem 1.5rem; 
+        flex-direction: column; 
+        text-align: center; 
+      }
+      .responsive-cta-btn {
+        width: 100%;
+        text-align: center;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
 
-  // If the user is already logged in, show a link to their dashboard
   const dashboardLink =
     user?.role === 'admin'     ? '/admin'     :
     user?.role === 'responder' ? '/responder' : '/dashboard';
 
-  // Localized Step data array mapping directly to translation keys
   const HOW_IT_WORKS = [
     { num: '01', title: t.step1Title, desc: t.step1Desc },
     { num: '02', title: t.step2Title, desc: t.step2Desc },
@@ -293,13 +329,13 @@ export default function LandingPage() {
     <div style={S.page}>
 
       {/* ── Navbar ─────────────────────────────────────────────── */}
-      <nav style={S.nav}>
+      <nav style={S.nav} className="responsive-nav">
         <Link to="/" style={S.navLogo}>
           <div style={S.navLogoIcon}>🔥</div>
           <span style={S.navLogoText}>{t.appName}</span>
         </Link>
 
-        <div style={S.navLinks}>
+        <div style={S.navLinks} className="responsive-nav-links">
           <LanguageSwitcher />
           <Link to="/safety" style={S.navLinkGhost}>{t.safetyTips}</Link>
 
@@ -315,7 +351,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ───────────────────────────────────────────────── */}
-      <section style={S.hero}>
+      <section style={S.hero} className="responsive-hero">
         <div style={S.heroBadge}>
           🔥 {t.heroBadge}
         </div>
@@ -331,18 +367,18 @@ export default function LandingPage() {
 
         <div style={S.heroCtas}>
           {user ? (
-            <Link to={dashboardLink} style={S.ctaPrimary}>{t.dashboard} →</Link>
+            <Link to={dashboardLink} style={S.ctaPrimary} className="responsive-cta-btn">{t.dashboard} →</Link>
           ) : (
-            <Link to="/register" style={S.ctaPrimary}>{t.reportFire}</Link>
+            <Link to="/register" style={S.ctaPrimary} className="responsive-cta-btn">{t.reportFire}</Link>
           )}
 
           {!user && (
-            <Link to="/report-guest" style={S.ctaPrimary}>
+            <Link to="/report-guest" style={S.ctaPrimary} className="responsive-cta-btn">
               🚨 Report a Fire Now
             </Link>
           )}
 
-          <Link to="/safety" style={S.ctaSecondary}>{t.learnSafety}</Link>
+          <Link to="/safety" style={S.ctaSecondary} className="responsive-cta-btn">{t.learnSafety}</Link>
         </div>
 
         {!user && (
@@ -353,7 +389,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── How It Works ───────────────────────────────────────── */}
-      <section style={S.steps}>
+      <section style={S.steps} className="responsive-steps">
         <p style={S.stepsLabel}>{t.howItWorksLabel}</p>
         <h2 style={S.stepsTitle}>{t.howItWorksTitle}</h2>
 
@@ -370,22 +406,22 @@ export default function LandingPage() {
 
       {/* ── CTA Banner ─────────────────────────────────────────── */}
       <div style={{ padding: '0 2rem' }}>
-        <div style={S.ctaBanner}>
+        <div style={S.ctaBanner} className="responsive-cta-banner">
           <h2 style={S.ctaBannerTitle}>{t.ctaBannerTitle}</h2>
           <p style={S.ctaBannerSub}>
             {t.ctaBannerSub}
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             {!user && (
-              <Link to="/register" style={S.ctaPrimary}>{t.createAccount}</Link>
+              <Link to="/register" style={S.ctaPrimary} className="responsive-cta-btn">{t.createAccount}</Link>
             )}
-            <Link to="/safety" style={S.ctaSecondary}>{t.safetyTips}</Link>
+            <Link to="/safety" style={S.ctaSecondary} className="responsive-cta-btn">{t.safetyTips}</Link>
           </div>
         </div>
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────── */}
-      <footer style={S.footer}>
+      <footer style={S.footer} className="responsive-footer">
         <span style={S.footerText}>{t.footerLeft}</span>
         <span style={S.footerText}>{t.footerRight}</span>
       </footer>

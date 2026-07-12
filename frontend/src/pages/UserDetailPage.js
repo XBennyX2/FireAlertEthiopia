@@ -70,6 +70,12 @@ export default function UserDetailPage() {
             <div><span style={{ color:'#555' }}>False reports:</span> {user.falseReportCount || 0}</div>
             <div><span style={{ color:'#555' }}>2FA:</span> {user.twoFactorEnabled ? '✅ On' : '❌ Off'}</div>
             <div><span style={{ color:'#555' }}>Google auth:</span> {user.googleId ? '✅ Linked' : '—'}</div>
+            <div>
+              <span style={{ color:'#555' }}>Station:</span>{' '}
+              <span style={{ color: user.station && user.station !== 'Unassigned' ? '#3b82f6' : '#f4820a' }}>
+                {user.station || 'Unassigned'}
+              </span>
+            </div>
           </div>
         </div>
 
