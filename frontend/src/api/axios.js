@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_URL } from './config'; // Make sure this path correctly matches your folder structure!
 
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api'
+  baseURL: API_URL 
 });
 
 // Automatically attach the JWT token to every request

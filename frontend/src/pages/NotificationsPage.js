@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+// Import your application config setup to dynamically reference the backend URL
+import { SERVER_URL } from '../config'; 
 import '../dashboard.css';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -31,7 +33,6 @@ export default function NotificationsPage() {
 
   function getEventMeta(type) {
     return EVENT_META[type] || { label: type || t.notification || 'Notification', color: '#f4820a' };
-    
   }
 
   const [notifications, setNotifications] = useState([
@@ -48,7 +49,8 @@ export default function NotificationsPage() {
 
   // ── Socket.io setup ───────────────────────────────────────────────
   useEffect(() => {
-    const socket = io('http://localhost:5000');
+    // Replaced hardcoded 'http://localhost:5000' with SERVER_URL
+    const socket = io(SERVER_URL);
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -85,7 +87,7 @@ export default function NotificationsPage() {
     });
 
     return () => socket.disconnect();
-  }, [user]);
+  }, [user, SERVER_URL]);
 
   function markAllRead() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));

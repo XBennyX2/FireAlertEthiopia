@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link }     from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import MapPicker    from '../components/MapPicker';
+// Import the dynamic server URL configuration to replace hardcoded localhost strings
+import { SERVER_URL } from '../config';
 import '../dashboard.css';
 import '../auth.css';
 
@@ -44,7 +46,8 @@ export default function GuestReportPage() {
     if (!validateIncident()) return;
     setSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/incidents/guest', {
+      // Use dynamic SERVER_URL route path template
+      const res = await fetch(`${SERVER_URL}/api/incidents/guest`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import API from '../api/axios';
+// Import the dynamic server URL configuration to replace localhost
+import { SERVER_URL } from '../config';
 import '../dashboard.css';
 
 function fmtDate(iso) {
@@ -42,7 +44,7 @@ export default function UserDetailPage() {
           <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1rem', flexWrap:'wrap' }}>
             <div style={{ width:56, height:56, borderRadius:'50%', overflow:'hidden', background:'linear-gradient(135deg,#e63c2f,#f4820a)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
               {user.profilePhoto
-                ? <img src={`http://localhost:5000/${user.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                ? <img src={`${SERVER_URL}/${user.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                 : <span style={{ fontSize:'1.25rem', fontWeight:800, color:'#fff' }}>{user.name?.charAt(0)}</span>
               }
             </div>

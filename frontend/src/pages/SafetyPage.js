@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import API from '../api/axios';
+// Import the dynamic server URL configuration to replace localhost references
+import { SERVER_URL } from '../config';
 import '../dashboard.css';
 
 const CATEGORY_COLORS = {
@@ -213,7 +215,7 @@ export default function SafetyPage() {
                 {/* ── Optional Dynamic Cover Image ──────────────────── */}
                 {item.imageUrl && (
                   <img
-                    src={`http://localhost:5000/${item.imageUrl}`}
+                    src={`${SERVER_URL}/${item.imageUrl}`}
                     alt={item.title}
                     style={{ width:'100%', borderRadius:8, marginBottom:'0.75rem', objectFit:'cover', maxHeight:200 }}
                     onError={e => e.target.style.display='none'}

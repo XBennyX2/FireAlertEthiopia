@@ -8,6 +8,8 @@ import 'leaflet/dist/leaflet.css';
 import '../utils/leafletIconFix';
 import { fireIcon, responderIcon } from '../utils/leafletIconFix';
 import { calculateRoute } from '../utils/routing';
+// Import the dynamic server URL configuration
+import { SERVER_URL } from '../config'; 
 
 // ── Re-center map when responder moves ───────────────────────────
 function MapUpdater({ responderPos, incidentPos }) {
@@ -18,7 +20,6 @@ function MapUpdater({ responderPos, incidentPos }) {
 
     const timer = setTimeout(() => {
       try {
-        // Strict guard checks before running map transitions
         if (!map || map._destroyed || !map.getContainer()) return;
 
         import('leaflet').then(L => {
@@ -65,7 +66,8 @@ export default function LiveTrackingMap({
   useEffect(() => {
     if (!incident?._id) return;
 
-    const socket = io('http://localhost:5000');
+    // Replaced hardcoded 'http://localhost:5000' with SERVER_URL
+    const socket = io(SERVER_URL);
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -217,10 +219,6 @@ export default function LiveTrackingMap({
         overflow:      'hidden',
         border:        '1px solid #1e1e1e',
       }}>
-        {/* 
-          Stable MapContainer key tied to incident ID blocks node-recycling behavior,
-          wiping the underlying DOM node cleanly on structural map flips.
-        */}
         <MapContainer
           key={`live-map-${incident._id}`}
           center={[incidentPos.lat, incidentPos.lng]}

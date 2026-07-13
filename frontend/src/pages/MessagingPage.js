@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import API from '../api/axios';
 import { io } from 'socket.io-client';
+// Import the configuration URL profile
+import { SERVER_URL } from '../config';
 import '../dashboard.css';
 
 function fmtTime(iso) {
@@ -38,7 +40,8 @@ export default function MessagingPage() {
 
   // Connect socket
   useEffect(() => {
-    const socket = io('http://localhost:5000', {
+    // Dynamic integration with Socket.io server
+    const socket = io(SERVER_URL, {
       auth: { token: localStorage.getItem('token') },
     });
     socketRef.current = socket;
@@ -220,7 +223,7 @@ export default function MessagingPage() {
                     fontSize:'0.75rem', fontWeight:800, color:'#fff', overflow:'hidden',
                   }}>
                     {c.partner.profilePhoto
-                      ? <img src={`http://localhost:5000/${c.partner.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      ? <img src={`${SERVER_URL}/${c.partner.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                       : c.partner.name?.charAt(0)
                     }
                   </div>
@@ -271,7 +274,7 @@ export default function MessagingPage() {
                   >
                     <div style={{ width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg,#e63c2f,#f4820a)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.85rem', fontWeight:800, color:'#fff', overflow:'hidden', flexShrink:0 }}>
                       {r.profilePhoto
-                        ? <img src={`http://localhost:5000/${r.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                        ? <img src={`${SERVER_URL}/${r.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                         : r.name?.charAt(0)
                       }
                     </div>
@@ -301,7 +304,7 @@ export default function MessagingPage() {
                 <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', padding:'0.85rem 1rem', borderBottom:'1px solid #111' }}>
                   <div style={{ width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg,#e63c2f,#f4820a)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.85rem', fontWeight:800, color:'#fff', overflow:'hidden', flexShrink:0 }}>
                     {activeThread.partner.profilePhoto
-                      ? <img src={`http://localhost:5000/${activeThread.partner.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      ? <img src={`${SERVER_URL}/${activeThread.partner.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                       : activeThread.partner.name?.charAt(0)
                     }
                   </div>
