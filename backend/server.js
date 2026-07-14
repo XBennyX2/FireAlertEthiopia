@@ -220,8 +220,11 @@ const allowed = [
   'http://127.0.0.1:3000',
   'https://localhost',
   'capacitor://localhost',
-  'http://192.168.1.6:3000',
-];
+  'https://firealert.vercel.app',
+  'https://fire-alert-ethiopia-git-master-xsilencex007-gmailcoms-projects.vercel.app',
+  'https://fire-alert-ethiopia.vercel.app',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
