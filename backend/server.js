@@ -133,8 +133,9 @@ app.use('/uploads', express.static('uploads'));
 // ── Global /api/ rate limiter ─────────────────────────────────────
 app.use('/api/', apiLimiter);
 
+// app.use('/api/auth/login',           detectSuspiciousLogin, authLimiter);
 // ── Specific route rate-limiting middleware triggers ──────────────
-app.use('/api/auth/login',           detectSuspiciousLogin, authLimiter);
+app.use('/api/auth/login',           authLimiter);
 app.use('/api/auth/register',        authLimiter);
 app.use('/api/auth/forgot-password', passwordResetLimiter);
 app.use('/api/auth/reset-password',  passwordResetLimiter);
