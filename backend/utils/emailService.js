@@ -2,8 +2,8 @@ const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
   host:   'smtp.gmail.com',
-  port:   465,
-  secure: true, // SSL
+  port:   587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -11,11 +11,9 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false,
   },
-  socketTimeout: 10000,
-  greetingTimeout: 10000,
-  connectionTimeout: 10000,
-  // Force IPv4 by binding to 0.0.0.0
-  localAddress: '0.0.0.0',
+  socketTimeout:      30000,
+  greetingTimeout:    30000,
+  connectionTimeout:  30000,
 });
 
 // ── Generate a 6-digit numeric code ──────────────────────────────
