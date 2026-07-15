@@ -32,6 +32,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // ── Fetch — Stale-While-Revalidate & SPA Fallback ──────────────
+// ── Fetch — Stale-While-Revalidate & SPA Fallback ──────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
@@ -51,7 +52,14 @@ self.addEventListener('fetch', (event) => {
   // 4. SPA Router Offline Fallback
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+      fetch(request).catch(async () => {
+        const fallback = await caches.match('/index.html');
+        // If index.html isn't cached, return a basic offline error page/text instead of undefined
+        return fallback || new Response(
+          '<h1>Offline</h1><p>Please check your connection.</p>', 
+          { status: 503, headers: { 'Content-Type': 'text/html' } }
+        );
+      })
     );
     return;
   }
@@ -70,8 +78,14 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
         }
         return networkResponse;
-      }).catch(() => {
-        // Silently fail background updates
+      }).catch((err) => {
+        // If there's no cached response and the network fetch failed, 
+        // we must return a valid error response to avoid the TypeError.
+        if (!cachedResponse) {
+          return new Response('Network error occurred', { status: 480, statusText: 'Network Error' });
+        }
+        // Otherwise, if we have a cache fallback, let the fetch fail gracefully in the background
+        console.warn('Background update failed:', err);
       });
 
       return cachedResponse || fetchPromise;
