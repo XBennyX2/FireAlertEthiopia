@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   isActive:         { type: Boolean, default: true },
   isBanned:         { type: Boolean, default: false },
   isRestricted:     { type: Boolean, default: false },
-  isVerified:       { type: Boolean, default: false },   // ← new
+  isVerified:       { type: Boolean, default: true },   // ← new
   language:         { type: String, enum: ['en', 'am'], default: 'en' },
   createdAt:        { type: Date, default: Date.now },
   lastLogin:        { type: Date },
