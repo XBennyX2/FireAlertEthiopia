@@ -1,5 +1,6 @@
 const Incident = require('../models/Incident');
 const axios    = require('axios');
+const { haversineDistance } = require('../utils/geo');
 
 const AI_URL = 'http://localhost:5001/api/ai';
 
@@ -73,7 +74,7 @@ const reportIncident = async (req, res) => {
   const {
     description, fire_type, lat, lng,
     address, gps_validated, gps_score, media_is_live,
-    isAnonymous,
+    isAnonymous, forceDuplicate,
   } = req.body;
 
   if (!description || !lat || !lng) {
@@ -81,6 +82,50 @@ const reportIncident = async (req, res) => {
   }
 
   try {
+    const parsedLat = parseFloat(lat);
+    const parsedLng = parseFloat(lng);
+
+    // ── Duplicate detection ───────────────────────────────────────
+    // Check for any active (non-rejected, non-resolved) incident within 500m
+    // reported in the last 30 minutes
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    const nearby = await Incident.find({
+      status:     { $nin: ['rejected', 'resolved'] },
+      reportedAt: { $gte: thirtyMinutesAgo },
+      'location.lat': {
+        $gte: parsedLat - 0.005, // ~500m latitude
+        $lte: parsedLat + 0.005,
+      },
+      'location.lng': {
+        $gte: parsedLng - 0.005, // ~500m longitude
+        $lte: parsedLng + 0.005,
+      },
+    });
+
+    const duplicate = nearby.find(i => {
+      const dist = haversineDistance(
+        parsedLat, parsedLng,
+        i.location.lat, i.location.lng
+      );
+      return dist <= 500; // within 500 meters
+    });
+
+    if (duplicate && forceDuplicate !== 'true' && forceDuplicate !== true) {
+      return res.status(409).json({
+        message:        'A fire incident has already been reported at this location.',
+        isDuplicate:    true,
+        existingId:     duplicate._id,
+        existingStatus: duplicate.status,
+        reportedAt:     duplicate.reportedAt,
+        distance:       Math.round(haversineDistance(
+          parsedLat, parsedLng,
+          duplicate.location.lat, duplicate.location.lng
+        )),
+      });
+    }
+    // ── End duplicate detection ───────────────────────────────────
+
     const mediaFiles = req.files ? req.files.map(f => f.path) : [];
     const hasMedia   = mediaFiles.length > 0;
     const firstMedia = hasMedia ? mediaFiles[0] : null;
@@ -90,8 +135,8 @@ const reportIncident = async (req, res) => {
     const ai = await getAIAnalysis(
       description,
       fire_type || 'other',
-      parseFloat(lat),
-      parseFloat(lng),
+      parsedLat,
+      parsedLng,
       req.user,
       hasMedia,
       gpsScore,
@@ -105,8 +150,8 @@ const reportIncident = async (req, res) => {
       description,
       fire_type:     fire_type || 'other',
       location: {
-        lat:     parseFloat(lat),
-        lng:     parseFloat(lng),
+        lat:     parsedLat,
+        lng:     parsedLng,
         address: address || ''
       },
       mediaFiles,
@@ -171,11 +216,25 @@ const getAllIncidents = async (req, res) => {
 
 const getPublicFeed = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status } = req.query;
+    const { page = 1, limit = 20, status, lat, lng, radius } = req.query;
     const query = {
       status: status ? status : { $in: ['verified','dispatched','resolved'] },
       isAnonymous: false, // never show anonymous in public feed
     };
+
+    if (lat && lng) {
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      const radMeters = parseFloat(radius) || 500;
+      const radDeg = radMeters / 111000;
+
+      query['location.lat'] = { $gte: latNum - radDeg, $lte: latNum + radDeg };
+      query['location.lng'] = { $gte: lngNum - radDeg, $lte: lngNum + radDeg };
+      if (!status) {
+        query.status = { $nin: ['rejected', 'resolved'] };
+      }
+      delete query.isAnonymous;
+    }
 
     const incidents = await Incident.find(query)
       .select('fire_type severity status location reportedAt description')
@@ -233,11 +292,12 @@ const exportMyIncidents = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 const reportGuestIncident = async (req, res) => {
   try {
     const {
       description, fire_type, severity,
-      location, guestEmail, guestPhone,
+      location, guestEmail, guestPhone, forceDuplicate,
     } = req.body;
 
     if (!description || !fire_type || !location) {
@@ -252,6 +312,32 @@ const reportGuestIncident = async (req, res) => {
       return res.status(400).json({ message: 'A valid phone number is required.' });
     }
 
+    const parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+
+    // ── Duplicate detection ───────────────────────────────────────
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const nearby = await Incident.find({
+      status:     { $nin: ['rejected', 'resolved'] },
+      reportedAt: { $gte: thirtyMinutesAgo },
+      'location.lat': { $gte: parsedLocation.lat - 0.005, $lte: parsedLocation.lat + 0.005 },
+      'location.lng': { $gte: parsedLocation.lng - 0.005, $lte: parsedLocation.lng + 0.005 },
+    });
+
+    const duplicate = nearby.find(i =>
+      haversineDistance(parsedLocation.lat, parsedLocation.lng, i.location.lat, i.location.lng) <= 500
+    );
+
+    if (duplicate && forceDuplicate !== 'true' && forceDuplicate !== true) {
+      return res.status(409).json({
+        message:        'A fire incident has already been reported at this location.',
+        isDuplicate:    true,
+        existingId:     duplicate._id,
+        existingStatus: duplicate.status,
+        reportedAt:     duplicate.reportedAt,
+        distance:       Math.round(haversineDistance(parsedLocation.lat, parsedLocation.lng, duplicate.location.lat, duplicate.location.lng)),
+      });
+    }
+
     const incident = await Incident.create({
       reportedBy:  null,
       isGuest:     true,
@@ -260,7 +346,7 @@ const reportGuestIncident = async (req, res) => {
       description: description.trim(),
       fire_type,
       severity:    severity || 'Medium',
-      location:    typeof location === 'string' ? JSON.parse(location) : location,
+      location:    parsedLocation,
       isAnonymous: false,
       ai_trust_score: 40, // guests start lower — no reputation to verify against
     });
@@ -272,7 +358,7 @@ const reportGuestIncident = async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description,
-          location,
+          location: parsedLocation,
           is_anonymous: false,
           reputation_score: 50,
           false_report_count: 0,
@@ -296,4 +382,35 @@ const reportGuestIncident = async (req, res) => {
   }
 };
 
-module.exports = { reportIncident, getMyIncidents, getAllIncidents, getPublicFeed, exportMyIncidents, reportGuestIncident };
+const getIncidentById = async (req, res) => {
+  try {
+    const incident = await Incident.findById(req.params.id)
+      .populate('reportedBy', 'name email reputationScore')
+      .populate('assignedResponder', 'name email')
+      .populate('statusHistory.updatedBy', 'name role')
+      .populate('infoRequests.requestedBy', 'name role')
+      .populate('infoRequests.assignedTo', 'name role');
+
+    if (!incident) {
+      return res.status(404).json({ message: 'Incident not found' });
+    }
+
+    // Mask identity if anonymous and requester is not the reporter or an admin/responder
+    if (
+      incident.isAnonymous &&
+      req.user.role !== 'admin' &&
+      req.user.role !== 'responder' &&
+      (!incident.reportedBy || incident.reportedBy._id.toString() !== req.user._id.toString())
+    ) {
+      const obj = incident.toObject();
+      obj.reportedBy = { name: 'Anonymous', email: '' };
+      return res.json(obj);
+    }
+
+    res.json(incident);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { reportIncident, getMyIncidents, getAllIncidents, getPublicFeed, exportMyIncidents, reportGuestIncident, getIncidentById, getAIAnalysis };

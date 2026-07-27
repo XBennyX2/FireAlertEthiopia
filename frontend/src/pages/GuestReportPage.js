@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link }     from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth }  from '../context/AuthContext';
 import MapPicker    from '../components/MapPicker';
 import '../dashboard.css';
 import '../auth.css';
@@ -9,6 +10,11 @@ const FIRE_TYPES = ['residential','commercial','vehicle','industrial','wildland'
 
 export default function GuestReportPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+
+  const dashboardLink =
+    user?.role === 'admin'     ? '/admin'     :
+    user?.role === 'responder' ? '/responder' : '/dashboard';
 
   const [step,        setStep]        = useState(1); // 1=contact, 2=incident, 3=success
   const [guestEmail,  setGuestEmail]  = useState('');
@@ -102,8 +108,14 @@ export default function GuestReportPage() {
           <span className="dash-topbar-logo-text">FireAlert</span>
         </Link>
         <div className="dash-topbar-right">
-          <Link to="/login"    className="btn-secondary" style={{ fontSize:'0.78rem' }}>Sign In</Link>
-          <Link to="/register" className="btn-primary"   style={{ fontSize:'0.78rem' }}>Register</Link>
+          {user ? (
+            <Link to={dashboardLink} className="btn-primary" style={{ fontSize:'0.78rem' }}>Dashboard</Link>
+          ) : (
+            <>
+              <Link to="/login"    className="btn-secondary" style={{ fontSize:'0.78rem' }}>Sign In</Link>
+              <Link to="/register" className="btn-primary"   style={{ fontSize:'0.78rem' }}>Register</Link>
+            </>
+          )}
         </div>
       </nav>
 
@@ -195,10 +207,12 @@ export default function GuestReportPage() {
               Continue →
             </button>
 
-            <p style={{ textAlign:'center', fontSize:'0.78rem', color:'#555', marginTop:'1rem' }}>
-              Have an account?{' '}
-              <Link to="/login" style={{ color:'#f4820a', textDecoration:'none' }}>Sign in to report</Link>
-            </p>
+            {!user && (
+              <p style={{ textAlign:'center', fontSize:'0.78rem', color:'#555', marginTop:'1rem' }}>
+                Have an account?{' '}
+                <Link to="/login" style={{ color:'#f4820a', textDecoration:'none' }}>Sign in to report</Link>
+              </p>
+            )}
           </div>
         )}
 

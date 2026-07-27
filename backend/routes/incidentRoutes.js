@@ -2,54 +2,53 @@ const express    = require('express');
 const router     = express.Router();
 const multer     = require('multer');
 const path       = require('path');
-const { requireActiveReputation } = require('../middleware/reputationMiddleware');
-const { protect }   = require('../middleware/authMiddleware');
-const { authorize } = require('../middleware/roleMiddleware');
-const { reportGuestIncident } = require('../controllers/incidentController');
+const { body }   = require('express-validator');
+const validate   = require('../middleware/validate');
 
-// Public — no auth required
-router.post('/guest', reportGuestIncident);
+const { protect }                = require('../middleware/authMiddleware');
+const { authorize }              = require('../middleware/roleMiddleware');
+const { requireActiveReputation } = require('../middleware/reputationMiddleware');
+
 const {
   reportIncident,
+  reportGuestIncident,
   getMyIncidents,
   getAllIncidents,
-  exportMyIncidents, // <-- Add this
-  getPublicFeed      // <-- Add this too!
+  exportMyIncidents,
+  getPublicFeed,
+  getIncidentById,
+  getAIAnalysis,
 } = require('../controllers/incidentController');
-// Multer config — saves uploaded files to the /uploads folder
+
+// ── Multer config ─────────────────────────────────────────────────
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
+  destination: (req, file, cb) => { cb(null, 'uploads/'); },
+  filename:    (req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, unique + path.extname(file.originalname));
-  }
+  },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+  limits:     { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|mp4|mov|avi/;
-    const ext     = allowed.test(path.extname(file.originalname).toLowerCase());
-    if (ext) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images and videos are allowed'));
-    }
-  }
+    const allowed = /jpeg|jpg|png|gif|mp4|mov|avi|webm/;
+    allowed.test(path.extname(file.originalname).toLowerCase())
+      ? cb(null, true)
+      : cb(new Error('Only images and videos are allowed'));
+  },
 });
 
-const { body } = require('express-validator');
-const validate = require('../middleware/validate');
+// ── Public routes (no auth) — MUST be before /:id ─────────────────
+router.post('/guest',  reportGuestIncident);
+router.get('/public',  getPublicFeed);
 
-// Routes
-// Public — no auth required
+// ── Authenticated specific routes — MUST be before /:id ───────────
 router.get('/mine/export', protect, exportMyIncidents);
-router.get('/public', getPublicFeed);
-router.get('/mine', protect, authorize('user'),                    getMyIncidents);
-router.get('/all',  protect, authorize('admin', 'responder'),      getAllIncidents);
+router.get('/mine',        protect, authorize('user'), getMyIncidents);
+router.get('/all',         protect, authorize('admin', 'responder'), getAllIncidents);
+router.get('/ai/:id',      protect, getAIAnalysis);
 
 router.post('/',
   protect,
@@ -64,5 +63,8 @@ router.post('/',
   ]),
   reportIncident
 );
+
+// ── Wildcard /:id — MUST be last ──────────────────────────────────
+router.get('/:id', protect, getIncidentById);
 
 module.exports = router;
