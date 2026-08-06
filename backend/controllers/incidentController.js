@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const Incident = require('../models/Incident');
 const axios    = require('axios');
 const { haversineDistance } = require('../utils/geo');
@@ -145,9 +146,42 @@ const reportIncident = async (req, res) => {
       isAnonymous
     );
 
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+    const userAgent = req.headers['user-agent'] || '';
+    const fpHash = crypto.createHash('sha256')
+      .update(`${ip}:${userAgent}`)
+      .digest('hex')
+      .substring(0, 16);
+
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const deviceTotal = await Incident.countDocuments({
+      'deviceFingerprint.hash': fpHash,
+      reportedAt: { $gte: oneDayAgo },
+    });
+    if (deviceTotal >= 10) {
+      return res.status(429).json({
+        message: 'Too many reports submitted from this device today.',
+        rateLimited: true,
+      });
+    }
+
+    const deviceRejected = await Incident.countDocuments({
+      'deviceFingerprint.hash': fpHash,
+      reportedAt: { $gte: oneDayAgo },
+      status: 'rejected',
+    });
+    const devicePenalty = deviceRejected >= 3 ? 30 : deviceRejected >= 1 ? 15 : 0;
+
+    let trustScore = ai.ai_trust_score;
+    let aiFlags = ai.ai_flags;
+    if (devicePenalty > 0) {
+      trustScore = Math.max(0, (trustScore || 50) - devicePenalty);
+      aiFlags = [...(aiFlags || []), `device_penalty_${devicePenalty}pts`];
+    }
+
     const incident = await Incident.create({
       reportedBy:    req.user._id,
-      description,
+      description:   description.trim(),
       fire_type:     fire_type || 'other',
       location: {
         lat:     parsedLat,
@@ -157,11 +191,12 @@ const reportIncident = async (req, res) => {
       mediaFiles,
       isAnonymous:    isAnonymous === true || isAnonymous === 'true',
       severity:       ai.severity,
-      ai_trust_score: ai.ai_trust_score,
+      ai_trust_score: trustScore,
       ai_risk_level:  ai.ai_risk_level,
-      ai_flags:       ai.ai_flags,
+      ai_flags:       aiFlags,
       is_duplicate:   ai.is_duplicate,
-      duplicate_of:   ai.duplicate_of
+      duplicate_of:   ai.duplicate_of,
+      deviceFingerprint: { ip, userAgent, hash: fpHash },
     });
 
     res.status(201).json({

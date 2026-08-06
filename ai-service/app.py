@@ -10,6 +10,7 @@ from modules.false_report_scorer  import calculate_report_trust_score, update_re
 from modules.heatmap_analytics    import generate_risk_heatmap, generate_trend_analysis
 from modules.text_classifier      import classify_description, classify_severity_from_text
 from modules.image_classifier     import analyze_fire_image
+from modules.fire_predictor      import predict_station
 
 load_dotenv()
 
@@ -17,8 +18,16 @@ app    = Flask(__name__)
 CORS(app)
 
 # MongoDB connection
-client = MongoClient(os.getenv('MONGO_URI'))
-db     = client.get_default_database()
+mongo_uri = os.getenv('MONGO_URI')
+client = MongoClient(mongo_uri) if mongo_uri else None
+
+db = None
+if client is not None:
+    try:
+        db = client.get_default_database()
+    except Exception as exc:
+        print(f"MongoDB default database unavailable: {exc}")
+        db = None
 
 print("All AI models loaded. Flask app ready.")
 
@@ -28,6 +37,9 @@ print("All AI models loaded. Flask app ready.")
 def route_check_duplicate():
     data       = request.json
     new_report = data.get('new_report', {})
+
+    if db is None:
+        return jsonify({'is_duplicate': False, 'matching_incidents': [], 'message': 'MongoDB not configured'})
 
     recent = list(db.incidents.find(
         {'status': {'$ne': 'rejected'}},
@@ -124,6 +136,9 @@ def route_update_reputation():
 # ── 5. Heatmap ────────────────────────────────────────────────────
 @app.route('/api/ai/heatmap', methods=['GET'])
 def route_heatmap():
+    if db is None:
+        return jsonify({'error': 'MongoDB not configured'})
+
     incidents = list(db.incidents.find(
         {},
         {'_id': 0, 'location': 1, 'severity': 1, 'reportedAt': 1}
@@ -147,6 +162,9 @@ def route_heatmap():
 # ── 6. Trends ─────────────────────────────────────────────────────
 @app.route('/api/ai/trends', methods=['GET'])
 def route_trends():
+    if db is None:
+        return jsonify({'error': 'MongoDB not configured'})
+
     incidents = list(db.incidents.find(
         {},
         {'_id': 0, 'fire_type': 1, 'severity': 1, 'reportedAt': 1}
@@ -166,7 +184,17 @@ def route_trends():
     return jsonify(result)
 
 
-# ── 7. Image-based fire verification (NOW REAL CLIP AI) ──────────
+# ── 7. Station prediction ───────────────────────────────────────
+@app.route('/api/ai/predict', methods=['GET'])
+def predict():
+    station = request.args.get('station', None)
+    result = predict_station(station)
+    if not result:
+        return jsonify({'error': 'No data for this station'}), 404
+    return jsonify(result)
+
+
+# ── 8. Image-based fire verification (NOW REAL CLIP AI) ──────────
 @app.route('/api/ai/analyze-image', methods=['POST'])
 def route_analyze_image():
     if 'image' not in request.files:

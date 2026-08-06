@@ -25,6 +25,7 @@ const {
   bulkMessage,
   getResponderPerformance,
   getMyApplication,
+  getStationPredictions,
   assignStation,
 } = require('../controllers/adminController');
 
@@ -102,5 +103,6 @@ router.get('/analytics/export/pdf',  protect, authorize('admin'), exportAnalytic
 // ── Admin-only: Other ─────────────────────────────────────────────
 router.post('/bulk-message',         protect, authorize('admin'), bulkMessage);
 router.get('/responder-performance', protect, authorize('admin'), getResponderPerformance);
+router.get('/station-predictions',    protect, authorize('admin', 'responder'), getStationPredictions);
 
 module.exports = router;

@@ -56,6 +56,11 @@ const incidentSchema = new mongoose.Schema({
   },
   reportedAt:  { type: Date, default: Date.now },
   isAnonymous: { type: Boolean, default: false },
+  deviceFingerprint: {
+    ip:        { type: String, default: '' },
+    userAgent: { type: String, default: '' },
+    hash:      { type: String, default: '' },
+  },
 
   infoRequests: [{
     message:     { type: String },
