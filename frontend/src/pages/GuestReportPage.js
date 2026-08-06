@@ -3,6 +3,7 @@ import { Link }     from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth }  from '../context/AuthContext';
 import MapPicker    from '../components/MapPicker';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import '../dashboard.css';
 import '../auth.css';
 
@@ -108,6 +109,7 @@ export default function GuestReportPage() {
           <span className="dash-topbar-logo-text">FireAlert</span>
         </Link>
         <div className="dash-topbar-right">
+          <LanguageSwitcher />
           {user ? (
             <Link to={dashboardLink} className="btn-primary" style={{ fontSize:'0.78rem' }}>Dashboard</Link>
           ) : (

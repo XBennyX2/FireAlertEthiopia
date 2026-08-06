@@ -286,9 +286,12 @@ export default function ReportForm() {
             <h1 className="dash-title">{t.reportAFire}</h1>
             <p className="dash-subtitle">{t.reportSubtitle}</p>
           </div>
-          <Link to="/dashboard" className="btn-secondary" aria-label="Go back to dashboard">
-            {t.back}
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <LanguageSwitcher />
+            <Link to="/dashboard" className="btn-secondary" aria-label="Go back to dashboard">
+              {t.back}
+            </Link>
+          </div>
         </div>
 
         {/* ── M1: Offline banner with role="status" ────────────── */}
