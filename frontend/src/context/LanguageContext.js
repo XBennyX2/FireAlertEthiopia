@@ -3,55 +3,54 @@ import translations from '../translation';
 
 const LanguageContext = createContext();
 
+function applyGoogleTranslate(lang) {
+  if (typeof document === 'undefined') return;
+
+  if (lang === 'am') {
+    document.cookie = 'googtrans=/en/am; path=/;';
+    document.cookie = `googtrans=/en/am; path=/; domain=${window.location.hostname};`;
+    document.documentElement.lang = 'am';
+
+    const select = document.querySelector('.goog-te-combo');
+    if (select) {
+      select.value = 'am';
+      select.dispatchEvent(new Event('change'));
+    }
+    return;
+  }
+
+  document.cookie = 'googtrans=/en/en; path=/;';
+  document.cookie = `googtrans=/en/en; path=/; domain=${window.location.hostname};`;
+  document.documentElement.lang = 'en';
+}
+
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState(
-    localStorage.getItem('language') || 'en'
-  );
+  const [language, setLanguage] = useState(() => {
+    if (typeof window === 'undefined') return 'en';
+    return localStorage.getItem('language') || 'en';
+  });
 
   function switchLanguage(lang) {
     setLanguage(lang);
     localStorage.setItem('language', lang);
-    
-    // Set Google Translate cookies
-    document.cookie = `googtrans=/en/${lang}; path=/;`;
-    document.cookie = `googtrans=/en/${lang}; path=/; domain=${window.location.hostname};`;
-    
-    // Try to trigger the Google Translate widget instantly
-    const select = document.querySelector('.goog-te-combo');
-    if (select) {
-      select.value = lang;
-      select.dispatchEvent(new Event('change'));
-    } else {
-      // If widget hasn't loaded yet, reload the page to initialize with the cookie
+    applyGoogleTranslate(lang);
+
+    if (typeof window !== 'undefined') {
       window.location.reload();
     }
   }
 
   useEffect(() => {
-    // Keep cookies synchronized
-    const currentLang = language;
-    document.cookie = `googtrans=/en/${currentLang}; path=/;`;
-    document.cookie = `googtrans=/en/${currentLang}; path=/; domain=${window.location.hostname};`;
+    document.documentElement.lang = language === 'am' ? 'am' : 'en';
 
-    let attempts = 0;
-    const triggerTranslation = () => {
-      const select = document.querySelector('.goog-te-combo');
-      if (select) {
-        if (select.value !== currentLang) {
-          select.value = currentLang;
-          select.dispatchEvent(new Event('change'));
-        }
-      } else if (attempts < 20) {
-        attempts++;
-        setTimeout(triggerTranslation, 300);
-      }
-    };
-
-    triggerTranslation();
+    if (language === 'am') {
+      applyGoogleTranslate(language);
+    } else {
+      applyGoogleTranslate('en');
+    }
   }, [language]);
 
-  // Always use English keys as the source. Google Translate will dynamically localize the DOM.
-  const t = translations['en'];
+  const t = translations[language] || translations.en;
 
   return (
     <LanguageContext.Provider value={{ language, switchLanguage, t }}>
