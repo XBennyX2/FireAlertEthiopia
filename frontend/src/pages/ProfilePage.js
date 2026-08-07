@@ -19,6 +19,7 @@ function getDashboardLink(role) {
 // ── Responder Performance Sub-component ──────────────────────────
 function ResponderPerformanceTab() {
   const { user } = useAuth();
+  const { t }    = useLanguage();
   const [stats,   setStats]   = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +30,7 @@ function ResponderPerformanceTab() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="loading-state">Loading performance…</div>;
+  if (loading) return <div className="loading-state">{t.loading}</div>;
   if (!stats)  return null;
 
   return (
@@ -70,7 +71,7 @@ function ResponderPerformanceTab() {
             <div className="stat-value">{stats.totalHandled}</div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Resolved</div>
+            <div className="stat-label">{t.resolved}</div>
             <div className="stat-value" style={{ color:'#22c55e' }}>{stats.resolved}</div>
           </div>
           <div className="stat-card">
@@ -106,6 +107,7 @@ function ResponderPerformanceTab() {
 
 // ── Login History Sub-component ───────────────────────────────────
 function LoginHistoryList() {
+  const { t }                 = useLanguage();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -116,7 +118,7 @@ function LoginHistoryList() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ color:'var(--text-muted)', fontSize:'0.82rem' }}>Loading…</div>;
+  if (loading) return <div style={{ color:'var(--text-muted)', fontSize:'0.82rem' }}>{t.loading}</div>;
 
   return (
     <div>
@@ -135,7 +137,7 @@ function LoginHistoryList() {
           </div>
         </div>
       ))}
-      {history.length === 0 && <div style={{ color:'#555', fontSize:'0.82rem' }}>No login history recorded yet.</div>}
+      {history.length === 0 && <div style={{ color:'#555', fontSize:'0.82rem' }}>{t.noLogs}</div>}
     </div>
   );
 }
@@ -403,7 +405,7 @@ export default function ProfilePage() {
         <div className="dash-topbar-right">
           <LanguageSwitcher />
           <Link to={dashLink} className="btn-secondary" style={{ fontSize:'0.78rem', padding:'0.4rem 0.9rem' }}>
-            ← {user?.role === 'admin' ? 'Admin' : user?.role === 'responder' ? 'Responder' : 'Dashboard'}
+            {t.back.replace('←', '')} {user?.role === 'admin' ? t.admin : user?.role === 'responder' ? t.responder : t.dashboard}
           </Link>
           <NotificationBell />
           <button className="dash-logout-btn" onClick={() => { logout(); navigate('/'); }}>
@@ -427,7 +429,7 @@ export default function ProfilePage() {
             </p>
           </div>
           <span className="dash-role-badge" style={{ textTransform:'capitalize' }}>
-            {user?.role}
+            {user?.role === 'admin' ? t.admin : user?.role === 'responder' ? t.responder : t.citizen}
           </span>
         </div>
 
@@ -519,14 +521,14 @@ export default function ProfilePage() {
         {/* ── Tabs — role-aware ────────────────────────────────── */}
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:'1.5rem' }}>
           <button style={TAB('profile')}       onClick={() => setActiveTab('profile')}>Profile Info</button>
-          <button style={TAB('password')}      onClick={() => setActiveTab('password')}>Password</button>
+          <button style={TAB('password')}      onClick={() => setActiveTab('password')}>{t.passwordLabel}</button>
           {user?.role === 'user' && (
-            <button style={TAB('reputation')} onClick={() => setActiveTab('reputation')}>Reputation</button>
+            <button style={TAB('reputation')} onClick={() => setActiveTab('reputation')}>{t.reputationScore}</button>
           )}
           {user?.role === 'responder' && (
             <button style={TAB('performance')} onClick={() => setActiveTab('performance')}>Performance</button>
           )}
-          <button style={TAB('notifications')} onClick={() => setActiveTab('notifications')}>🔔 Notifications</button>
+          <button style={TAB('notifications')} onClick={() => setActiveTab('notifications')}>🔔 {t.notifications}</button>
           <button style={TAB('security')}      onClick={() => setActiveTab('security')}>🔐 Security</button>
           <button style={TAB('danger')}        onClick={() => setActiveTab('danger')}>Account</button>
         </div>
@@ -540,8 +542,8 @@ export default function ProfilePage() {
               <div className="section-label" style={{ marginBottom:'1rem' }}>Basic Information</div>
               <form onSubmit={handleSaveProfile} noValidate>
                 <div className="form-group">
-                  <label className="form-label">Full Name</label>
-                  <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" />
+                  <label className="form-label">{t.fullNameLabel}</label>
+                  <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder={t.fullNameLabel} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Phone Number</label>
@@ -550,7 +552,7 @@ export default function ProfilePage() {
                 </div>
                 <div style={{ display:'flex', gap:'0.75rem', justifyContent:'flex-end' }}>
                   <button type="submit" className="btn-primary" disabled={saving}>
-                    {saving ? 'Saving…' : 'Save Changes'}
+                    {saving ? t.loading : t.saveChanges}
                   </button>
                 </div>
               </form>
@@ -558,7 +560,7 @@ export default function ProfilePage() {
 
             {/* Email change — separate card with verification flow */}
             <div className="card">
-              <div className="section-label" style={{ marginBottom:'0.5rem' }}>Email Address</div>
+              <div className="section-label" style={{ marginBottom:'0.5rem' }}>{t.emailLabel} Address</div>
               <div style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:'1rem' }}>
                 Current: <strong style={{ color:'var(--text-primary)' }}>{email}</strong>
               </div>
@@ -567,7 +569,7 @@ export default function ProfilePage() {
               {emailStep === 'idle' && (
                 <div>
                   <div className="form-group" style={{ marginBottom:'0.75rem' }}>
-                    <label className="form-label">New Email Address</label>
+                    <label className="form-label">New {t.emailLabel} Address</label>
                     <input
                       className="form-input"
                       type="email"
@@ -622,7 +624,7 @@ export default function ProfilePage() {
                       {codeCountdown > 0 ? `Resend in ${codeCountdown}s` : 'Resend Code'}
                     </button>
                     <button type="button" className="btn-secondary" onClick={resetEmailFlow}>
-                      Cancel
+                      {t.cancel}
                     </button>
                   </div>
                 </div>
@@ -648,16 +650,16 @@ export default function ProfilePage() {
           <div className="card">
             <form onSubmit={handleChangePassword} noValidate>
               <div className="form-group">
-                <label className="form-label">Current Password</label>
+                <label className="form-label">Current {t.passwordLabel}</label>
                 <input className="form-input" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
               </div>
               <div className="form-group">
-                <label className="form-label">New Password</label>
-                <input className="form-input" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min. 6 characters" autoComplete="new-password" />
+                <label className="form-label">New {t.passwordLabel}</label>
+                <input className="form-input" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder={t.minPassword} autoComplete="new-password" />
               </div>
               <div className="form-group">
-                <label className="form-label">Confirm New Password</label>
-                <input className="form-input" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" autoComplete="new-password" />
+                <label className="form-label">{t.confirmPassword}</label>
+                <input className="form-input" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder={t.repeatPassword} autoComplete="new-password" />
               </div>
 
               {/* Strength bar */}
@@ -693,7 +695,7 @@ export default function ProfilePage() {
               <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:'3.5rem', color: repLevel.color, letterSpacing:'-0.04em', lineHeight:1 }}>
                 {user?.reputationScore ?? 100}
               </div>
-              <div style={{ fontSize:'0.875rem', color:'var(--text-muted)', marginTop:'0.4rem', marginBottom:'1rem' }}>Reputation Score</div>
+              <div style={{ fontSize:'0.875rem', color:'var(--text-muted)', marginTop:'0.4rem', marginBottom:'1rem' }}>{t.reputationScore}</div>
               <div style={{
                 display:'inline-flex', alignItems:'center', gap:'0.4rem',
                 padding:'0.35rem 1rem', borderRadius:999,
@@ -877,7 +879,7 @@ export default function ProfilePage() {
                   <button className="btn-secondary" style={{ fontSize:'0.8rem' }}
                     onClick={() => { setTwoFactorStep('idle'); setTwoFactorSetupCode(''); }}
                   >
-                    Cancel
+                    {t.cancel}
                   </button>
                 </div>
               )}
@@ -923,7 +925,7 @@ export default function ProfilePage() {
                   <button className="btn-secondary" style={{ fontSize:'0.8rem' }}
                     onClick={() => { setTwoFactorStep('idle'); setTwoFactorSetupCode(''); }}
                   >
-                    Cancel
+                    {t.cancel}
                   </button>
                 </div>
               )}
@@ -935,7 +937,7 @@ export default function ProfilePage() {
                 <div className="section-label">Active Sessions</div>
                 <div style={{ display:'flex', gap:'0.5rem' }}>
                   <button className="btn-secondary" style={{ fontSize:'0.75rem' }} onClick={loadSessions}>
-                    ↻ Refresh
+                    {t.refresh}
                   </button>
                   <button
                     className="btn-danger"
@@ -956,10 +958,10 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {sessionsLoading && <div className="loading-state">Loading sessions…</div>}
+              {sessionsLoading && <div className="loading-state">{t.loading}</div>}
 
               {!sessionsLoading && sessions.length === 0 && (
-                <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>No active sessions found.</div>
+                <div style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{t.noData}</div>
               )}
 
               {sessions.map(s => (
@@ -985,7 +987,7 @@ export default function ProfilePage() {
                       IP: {s.ipAddress} · Last active: {new Date(s.lastActive).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}
                     </div>
                     <div style={{ fontSize:'0.68rem', color:'#444', marginTop:'0.1rem' }}>
-                      Signed in: {new Date(s.createdAt).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+                      {t.joined}: {new Date(s.createdAt).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
                     </div>
                   </div>
                   {!s.isCurrent && (
@@ -1053,7 +1055,7 @@ export default function ProfilePage() {
                     {deleting ? 'Deleting…' : 'Yes, Delete Permanently'}
                   </button>
                   <button className="btn-secondary" onClick={() => { setDeleteConfirm(false); setDeletePassword(''); }}>
-                    Cancel
+                    {t.cancel}
                   </button>
                 </div>
               </div>

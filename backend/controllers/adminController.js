@@ -7,6 +7,7 @@ const { stringify } = require('csv-stringify/sync');
 const bcrypt         = require('bcryptjs');
 const multer          = require('multer');
 const ForumPost = require('../models/ForumPost');
+const { haversineDistance } = require('../utils/geo');
 
 const csvUpload = multer({ storage: multer.memoryStorage() }).single('file');
 // ── Helper: write an audit log entry ─────────────────────────────
@@ -66,6 +67,58 @@ const getResponderPerformance = async (req, res) => {
     res.json(stats);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+const getStationPredictions = async (req, res) => {
+  try {
+    const { stationName } = req.query;
+    const aiUrl  = process.env.AI_SERVICE_URL || 'http://localhost:5001';
+    const params = stationName ? `?station=${encodeURIComponent(stationName)}` : '';
+
+    const axios    = require('axios');
+    const response = await axios.get(`${aiUrl}/api/ai/predict${params}`, {
+      timeout: 10000,
+    });
+
+    const predictionData = response.data || {};
+    const forecast = Array.isArray(predictionData.forecast) ? predictionData.forecast : [];
+    const byHour = Array.isArray(predictionData.byHour)
+      ? predictionData.byHour
+      : Array(24).fill(0);
+    const byDay = Array.isArray(predictionData.byDay)
+      ? predictionData.byDay
+      : Array(7).fill(0);
+    const byMonth = Array.isArray(predictionData.byMonth)
+      ? predictionData.byMonth
+      : Array(12).fill(0);
+
+    const peakHourValue = predictionData.peakHour ?? (
+      byHour.length ? byHour.indexOf(Math.max(...byHour)) : 0
+    );
+    const peakHour = typeof peakHourValue === 'number'
+      ? `${peakHourValue}:00`
+      : (peakHourValue || '0:00');
+
+    res.json({
+      station: predictionData.station || 'All Stations (City-wide)',
+      totalIncidents: predictionData.totalIncidents ?? forecast.length,
+      period: predictionData.period || 'Historical data',
+      peakHour,
+      peakDay: predictionData.peakDay || '—',
+      peakMonth: predictionData.peakMonth || '—',
+      dominantType: predictionData.dominantType || 'residential',
+      byHour,
+      byDay,
+      byMonth,
+      forecast,
+      preventionTips: Array.isArray(predictionData.preventionTips) ? predictionData.preventionTips : [],
+      riskScore: predictionData.riskScore ?? 0,
+      avgResponseMinutes: predictionData.avgResponseMinutes ?? 0,
+      dataSource: predictionData.dataSource || 'AI service',
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Prediction service unavailable: ' + error.message });
   }
 };
 
@@ -881,5 +934,6 @@ module.exports = {
   bulkMessage,          // ← add
   getUserDetail,        // ← add
   getResponderPerformance, // ← add
+  getStationPredictions,
   assignStation,          // ← add
 };

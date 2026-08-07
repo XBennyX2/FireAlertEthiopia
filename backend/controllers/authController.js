@@ -48,9 +48,18 @@ async function issueVerificationCode(user) {
   await sendVerificationCode(user.email, code, 'registration');
 }
 
+function normalizeEmail(email) {
+  const lower = email.toLowerCase().trim();
+  const [local, domain] = lower.split('@');
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    return `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
+  }
+  return `${local.split('+')[0]}@${domain}`;
+}
+
 // ── Register ──────────────────────────────────────────────────────
 const register = async (req, res) => {
-  const { name, email, password, phone } = req.body; 
+  const { name, email, password, phone } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'Please provide name, email and password' });
@@ -61,19 +70,35 @@ const register = async (req, res) => {
   }
 
   try {
-    const userExists = await User.findOne({ email: email.toLowerCase().trim() });
-    if (userExists) {
-      return res.status(400).json({ message: 'An account with this email already exists' });
+    const normalizedEmail = normalizeEmail(email);
+    const registrationIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const emailExists = await User.findOne({
+      $or: [
+        { email: email.toLowerCase().trim() },
+        { normalizedEmail },
+      ],
+    });
+    if (emailExists) {
+      return res.status(400).json({ message: 'An account with this email already exists.' });
     }
 
-    const salt           = await bcrypt.genSalt(10);
+    const ipCount = await User.countDocuments({ registrationIp, createdAt: { $gte: oneDayAgo } });
+    if (ipCount >= 5) {
+      return res.status(429).json({ message: 'Too many accounts created from this device. Try again tomorrow.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const user = await User.create({
-      name:       name.trim(),
-      email:      email.toLowerCase().trim(),
-      password:   hashedPassword,
-      phone:      phone?.trim() || '',   
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      normalizedEmail,
+      registrationIp,
+      password: hashedPassword,
+      phone: phone?.trim() || '',
       isVerified: false,
     });
 
@@ -84,12 +109,11 @@ const register = async (req, res) => {
     }
 
     res.status(201).json({
-      message:    'Account created. Please check your email for a verification code.',
-      userId:     user._id,
-      email:      user.email,
+      message: 'Account created. Please check your email for a verification code.',
+      userId: user._id,
+      email: user.email,
       isVerified: false,
     });
-
   } catch (error) {
     console.error('Register error:', error.message);
     res.status(500).json({ message: error.message });

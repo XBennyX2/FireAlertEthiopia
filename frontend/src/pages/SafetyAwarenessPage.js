@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import '../dashboard.css';
 
 export default function SafetyAwarenessPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+
+  const dashboardLink =
+    user?.role === 'admin'     ? '/admin'     :
+    user?.role === 'responder' ? '/responder' : '/dashboard';
 
   // Pull arrays from translations so they switch with the language
   const PREVENTION_TIPS   = t.preventionTips;
@@ -22,8 +28,14 @@ export default function SafetyAwarenessPage() {
         </Link>
         <div className="dash-topbar-right">
           <LanguageSwitcher />
-          <Link to="/login"    className="btn-secondary" style={{ fontSize:'0.8rem', padding:'0.4rem 0.9rem' }}>{t.signIn}</Link>
-          <Link to="/register" className="btn-primary"   style={{ fontSize:'0.8rem', padding:'0.4rem 1rem'  }}>{t.getStarted}</Link>
+          {user ? (
+            <Link to={dashboardLink} className="btn-primary" style={{ fontSize:'0.8rem', padding:'0.4rem 1rem' }}>Dashboard</Link>
+          ) : (
+            <>
+              <Link to="/login"    className="btn-secondary" style={{ fontSize:'0.8rem', padding:'0.4rem 0.9rem' }}>{t.signIn}</Link>
+              <Link to="/register" className="btn-primary"   style={{ fontSize:'0.8rem', padding:'0.4rem 1rem'  }}>{t.getStarted}</Link>
+            </>
+          )}
         </div>
       </nav>
 
@@ -118,15 +130,17 @@ export default function SafetyAwarenessPage() {
         </div>
 
         {/* ── CTA ──────────────────────────────────────────────── */}
-        <div style={{ textAlign:'center', padding:'2.5rem', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, marginBottom:'2rem' }}>
-          <h3 style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:'1.25rem', letterSpacing:'-0.02em', color:'var(--text-primary)', margin:'0 0 0.5rem' }}>
-            {t.safetyCtaTitle}
-          </h3>
-          <p style={{ color:'var(--text-muted)', fontSize:'0.875rem', margin:'0 0 1.5rem' }}>
-            {t.safetyCtaSub}
-          </p>
-          <Link to="/register" className="btn-primary">{t.createAccount} →</Link>
-        </div>
+        {!user && (
+          <div style={{ textAlign:'center', padding:'2.5rem', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:14, marginBottom:'2rem' }}>
+            <h3 style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:'1.25rem', letterSpacing:'-0.02em', color:'var(--text-primary)', margin:'0 0 0.5rem' }}>
+              {t.safetyCtaTitle}
+            </h3>
+            <p style={{ color:'var(--text-muted)', fontSize:'0.875rem', margin:'0 0 1.5rem' }}>
+              {t.safetyCtaSub}
+            </p>
+            <Link to="/register" className="btn-primary">{t.createAccount} →</Link>
+          </div>
+        )}
 
       </div>
     </div>

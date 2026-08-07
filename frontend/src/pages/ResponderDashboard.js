@@ -181,6 +181,7 @@ export default function ResponderDashboard() {
   const [actionNotes,       setActionNotes]       = useState({});
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [myStation, setMyStation] = useState('');
+  const [stationPred, setStationPred] = useState(null);
 
   useEffect(() => {
     API.get('/messages/unread-count')
@@ -193,6 +194,13 @@ export default function ResponderDashboard() {
       .then(({ data }) => setMyStation(data.station))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!myStation || myStation === 'Unassigned') return;
+    API.get(`/admin/station-predictions?stationName=${encodeURIComponent(myStation)}`)
+      .then(({ data }) => setStationPred(data))
+      .catch(() => {});
+  }, [myStation]);
 
   const ACTION_LABELS = {
     verify:   { label: t.verify,   style: 'btn-action'  },
@@ -458,6 +466,34 @@ export default function ResponderDashboard() {
                       : myStation
                     }
                   </div>
+                </div>
+              </div>
+            )}
+
+            {stationPred && (
+              <div className="card" style={{ marginTop:'1.25rem', borderLeft:'3px solid #f4820a' }}>
+                <div style={{ fontSize:'0.82rem', fontWeight:700, color:'#f0ede8', marginBottom:'0.5rem' }}>
+                  🔮 {stationPred.station} — This Week's Risk
+                </div>
+                <div style={{ fontSize:'0.75rem', color:'#888', marginBottom:'0.75rem' }}>
+                  Peak: <strong style={{ color:'#f4820a' }}>{stationPred.peakDay}s at {stationPred.peakHour}</strong> ·
+                  Dominant type: <strong style={{ color:'#f0ede8', textTransform:'capitalize' }}>{stationPred.dominantType}</strong>
+                </div>
+                <div style={{ display:'flex', alignItems:'flex-end', gap:2, height:40, marginBottom:'0.75rem' }}>
+                  {stationPred.forecast.map((day, i) => {
+                    const max = Math.max(...stationPred.forecast.map(d => d.predicted), 1);
+                    const color = day.riskLevel === 'High' ? '#e63c2f' : day.riskLevel === 'Medium' ? '#f4820a' : '#22c55e';
+                    return (
+                      <div key={i} title={`${day.dayOfWeek}: ${day.riskLevel} risk`}
+                        style={{ flex:1, height:`${Math.max((day.predicted / max) * 100, 5)}%`, background:color, borderRadius:'2px 2px 0 0', opacity:0.8, cursor:'help' }} />
+                    );
+                  })}
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', color:'#444', marginBottom:'0.75rem' }}>
+                  {stationPred.forecast.map((d, i) => <span key={i}>{d.dayOfWeek.substring(0, 3)}</span>)}
+                </div>
+                <div style={{ fontSize:'0.78rem', color:'#c0bdb8', lineHeight:1.6 }}>
+                  💡 {stationPred.preventionTips[0]}
                 </div>
               </div>
             )}

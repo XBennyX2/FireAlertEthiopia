@@ -22,7 +22,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'health' | 'safety' | 'appeals' | 'forum'
+  const [tab, setTab] = useState('users'); // 'users' | 'applications' | 'audit' | 'map' | 'analytics' | 'predictions' | 'health' | 'safety' | 'appeals' | 'forum'
 
   const [users,    setUsers]    = useState([]);
   const [stationFilter, setStationFilter] = useState('');
@@ -69,6 +69,11 @@ export default function AdminDashboard() {
 
   // Health state
   const [health, setHealth] = useState(null);
+
+  // Predictions state
+  const [predictions, setPredictions] = useState(null);
+  const [predStation, setPredStation] = useState('');
+  const [predLoading, setPredLoading] = useState(false);
 
   // Appeals & Forum state
   const [appeals, setAppeals] = useState([]);
@@ -171,6 +176,24 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'analytics') loadAnalytics();
   }, [tab, analyticsStartDate, analyticsEndDate]);
+
+  async function loadPredictions() {
+    setPredLoading(true);
+    try {
+      const q = predStation ? `?stationName=${encodeURIComponent(predStation)}` : '';
+      const { data } = await API.get(`/admin/station-predictions${q}`);
+      setPredictions(data);
+    } catch {
+      toast.error('Failed to load predictions.');
+    } finally {
+      setPredLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab !== 'predictions') return;
+    loadPredictions();
+  }, [tab, predStation]);
 
   async function handleExportCSV() {
     try {
@@ -476,6 +499,9 @@ export default function AdminDashboard() {
            </button>
           <button style={TAB_STYLE('analytics')} onClick={() => setTab('analytics')}>
             📊 Analytics
+          </button>
+          <button style={TAB_STYLE('predictions')} onClick={() => setTab('predictions')}>
+            🔮 Predictions
           </button>
           <button style={TAB_STYLE('safety')} onClick={() => setTab('safety')}>
             Safety Content {pendingSafety.length > 0 && (
@@ -1229,6 +1255,127 @@ export default function AdminDashboard() {
                 <div className="empty-state-icon">📊</div>
                 <div>No analytics data available for the selected range.</div>
                </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Predictions Tab ─────────────────────────────────────── */}
+        {!loading && tab === 'predictions' && (
+          <div>
+            <div style={{ display:'flex', gap:'0.75rem', marginBottom:'1.5rem', flexWrap:'wrap', alignItems:'center' }}>
+              <select
+                className="form-select"
+                value={predStation}
+                onChange={e => setPredStation(e.target.value)}
+                style={{ width:'auto', minWidth:220, marginBottom:0 }}
+              >
+                <option value="">All Stations (City-wide)</option>
+                {['Bole','Kirkos','Yeka','Arada','Akaki Kaliti','Nifas Silk-Lafto','Gulele','Lideta','Kolfe Keranio','Addis Ketema']
+                  .map(s => <option key={s} value={`${s} Fire Station`}>{s} Fire Station</option>)}
+              </select>
+              <button className="btn-secondary" style={{ fontSize:'0.78rem' }} onClick={loadPredictions}>
+                ↻ Refresh
+              </button>
+            </div>
+
+            {predLoading && <div className="loading-state">Analyzing 6 months of data…</div>}
+
+            {!predLoading && predictions && Array.isArray(predictions.forecast) && Array.isArray(predictions.byHour) && (
+              <>
+                <div className="stat-grid" style={{ marginBottom:'1.5rem' }}>
+                  <div className="stat-card">
+                    <div className="stat-label">Coverage</div>
+                    <div className="stat-value" style={{ fontSize:'0.85rem' }}>{predictions.station}</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">6-Month Total</div>
+                    <div className="stat-value">{predictions.totalIncidents}</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Peak Window</div>
+                    <div className="stat-value" style={{ fontSize:'0.78rem', color:'#f4820a' }}>
+                      {predictions.peakDay || '—'}{predictions.peakDay ? 's' : ''}<br />{predictions.peakHour || '—'}
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Risk Score</div>
+                    <div className="stat-value" style={{ color: (predictions.riskScore || 0) >= 60 ? '#e63c2f' : (predictions.riskScore || 0) >= 30 ? '#f4820a' : '#22c55e' }}>
+                      {(predictions.riskScore ?? 0)}/100
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card" style={{ marginBottom:'1.25rem' }}>
+                  <div className="section-label" style={{ marginBottom:'1rem' }}>
+                    📅 7-Day Incident Forecast
+                  </div>
+                  {(predictions.forecast || []).map((day, i) => {
+                    const max = Math.max(...(predictions.forecast || []).map(d => d.predicted || 0), 1);
+                    const pct = (day.predicted / max) * 100;
+                    const color = day.riskLevel === 'High' ? '#e63c2f' : day.riskLevel === 'Medium' ? '#f4820a' : '#22c55e';
+                    return (
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.5rem' }}>
+                        <div style={{ width:110, fontSize:'0.75rem', color:'#888', flexShrink:0 }}>{day.date}</div>
+                        <div style={{ flex:1, height:20, background:'#0a0a0a', borderRadius:4, overflow:'hidden' }}>
+                          <div style={{ height:'100%', width:`${pct}%`, background:color, borderRadius:4, display:'flex', alignItems:'center', paddingLeft:6, minWidth: day.predicted > 0 ? 30 : 0 }}>
+                            <span style={{ fontSize:'0.65rem', color:'#fff', fontWeight:700 }}>
+                              {day.predicted > 0 ? `~${day.predicted}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={{ fontSize:'0.68rem', color, fontWeight:700, width:50, textAlign:'right', flexShrink:0 }}>
+                          {day.riskLevel}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize:'0.7rem', color:'#444', marginTop:'0.75rem' }}>
+                    ⓘ Predicted daily incident count based on day-of-week patterns from 6-month historical data.
+                  </div>
+                </div>
+
+                <div className="card" style={{ marginBottom:'1.25rem' }}>
+                  <div className="section-label" style={{ marginBottom:'1rem' }}>⏰ Hourly Risk Pattern</div>
+                  <div style={{ display:'flex', alignItems:'flex-end', gap:2, height:60 }}>
+                    {(predictions.byHour || []).map((count, h) => {
+                      const max = Math.max(...(predictions.byHour || []), 1);
+                      const pct = (count / max) * 100;
+                      const isPeak = h === parseInt(predictions.peakHour || '0');
+                      return (
+                        <div key={h} title={`${h}:00 — ${count} incidents`}
+                          style={{ flex:1, height:`${Math.max(pct, 3)}%`, background: isPeak ? '#e63c2f' : '#f4820a', opacity: isPeak ? 1 : 0.4 + (pct / max) * 0.6, borderRadius:'2px 2px 0 0', cursor:'help' }} />
+                      );
+                    })}
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.62rem', color:'#444', marginTop:4 }}>
+                    <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="section-label" style={{ marginBottom:'0.5rem' }}>
+                    🛡️ Prevention Recommendations
+                  </div>
+                  <div style={{ fontSize:'0.72rem', color:'#555', marginBottom:'0.85rem' }}>
+                    Generated from {predictions.totalIncidents} incidents · Dominant: <span style={{ textTransform:'capitalize', color:'#f0ede8' }}>{predictions.dominantType}</span> · Peak: {predictions.peakDay}s at {predictions.peakHour}
+                  </div>
+                  {(predictions.preventionTips || []).map((tip, i) => (
+                    <div key={i} style={{ display:'flex', gap:'0.75rem', padding:'0.65rem 0', borderBottom:'1px solid #111' }}>
+                      <div style={{ width:22, height:22, borderRadius:'50%', flexShrink:0, background:'linear-gradient(135deg,#e63c2f,#f4820a)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.68rem', fontWeight:800, color:'#fff' }}>
+                        {i + 1}
+                      </div>
+                      <div style={{ fontSize:'0.83rem', color:'var(--text-primary)', lineHeight:1.65 }}>{tip}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {!predLoading && (!predictions || !Array.isArray(predictions.forecast) || !Array.isArray(predictions.byHour)) && (
+              <div className="empty-state">
+                <div className="empty-state-icon">🔮</div>
+                <div>Select a station to view predictions and recommendations.</div>
+              </div>
             )}
           </div>
         )}

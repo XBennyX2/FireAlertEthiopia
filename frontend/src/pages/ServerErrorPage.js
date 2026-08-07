@@ -1,13 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-
 export default function ServerErrorPage() {
-  const { user }   = useAuth();
-  const navigate   = useNavigate();
-  const dashLink   = user?.role === 'admin'     ? '/admin'
-                   : user?.role === 'responder' ? '/responder'
-                   : user                       ? '/dashboard'
-                   : '/';
 
   return (
     <div style={{
@@ -40,14 +31,14 @@ export default function ServerErrorPage() {
         >
           ↻ Refresh Page
         </button>
-        <Link to={dashLink} style={{
+        <a href="/" style={{
           padding:'0.65rem 1.25rem',
           background:'linear-gradient(135deg,#e63c2f,#f4820a)',
           color:'#fff', borderRadius:8, textDecoration:'none',
           fontWeight:700, fontSize:'0.875rem',
         }}>
           ← Back to Safety
-        </Link>
+        </a>
       </div>
     </div>
   );

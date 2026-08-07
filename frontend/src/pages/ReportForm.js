@@ -36,6 +36,8 @@ export default function ReportForm() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [showCamera, setShowCamera] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState(null);
+  const [forceDuplicate, setForceDuplicate] = useState(false);
   const isOnline = useOnlineStatus();
 
   // ── M1: ref for live-error announcement ──────────────────────────
@@ -189,6 +191,7 @@ export default function ReportForm() {
       Object.entries(reportPayload).forEach(([key, value]) => formData.append(key, value));
       mediaFiles.forEach(({ file }) => formData.append('media', file));
       formData.append('severity', severity);
+      if (forceDuplicate) formData.append('forceDuplicate', 'true');
 
       await API.post('/incidents', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -198,6 +201,13 @@ export default function ReportForm() {
       setTimeout(() => navigate('/dashboard'), 1200);
 
     } catch (err) {
+      // ── Handle duplicate ──────────────────────────────────────────
+      if (err.response?.status === 409 && err.response.data?.isDuplicate) {
+        const { existingId, existingStatus, distance } = err.response.data;
+        setDuplicateInfo({ existingId, existingStatus, distance });
+        return; // don't show generic error
+      }
+      // ── Handle other errors ───────────────────────────────────────
       const isNetworkError = !err.response;
 
       if (isNetworkError) {
@@ -209,7 +219,9 @@ export default function ReportForm() {
           toast.error('Failed to submit and could not save offline. Please try again.');
         }
       } else {
-        toast.error(err.response?.data?.message || 'Submission failed. Please try again.');
+        const msg = err.response?.data?.message || 'Submission failed. Please try again.';
+        toast.error(msg);
+        setSubmitError(msg);
       }
     } finally {
       setSubmitting(false);
@@ -274,9 +286,12 @@ export default function ReportForm() {
             <h1 className="dash-title">{t.reportAFire}</h1>
             <p className="dash-subtitle">{t.reportSubtitle}</p>
           </div>
-          <Link to="/dashboard" className="btn-secondary" aria-label="Go back to dashboard">
-            {t.back}
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <LanguageSwitcher />
+            <Link to="/dashboard" className="btn-secondary" aria-label="Go back to dashboard">
+              {t.back}
+            </Link>
+          </div>
         </div>
 
         {/* ── M1: Offline banner with role="status" ────────────── */}
@@ -712,6 +727,47 @@ export default function ReportForm() {
                 </div>
               </label>
             </div>
+
+            {/* ── Duplicate Incident Warning ────────────────── */}
+            {duplicateInfo && (
+              <div style={{
+                background:   'rgba(244,130,10,0.1)',
+                border:       '1px solid rgba(244,130,10,0.3)',
+                borderRadius: 10,
+                padding:      '1rem 1.25rem',
+                marginBottom: '1rem',
+              }}>
+                <div style={{ fontWeight:700, color:'#f4820a', marginBottom:'0.5rem', fontSize:'0.9rem' }}>
+                  ⚠ Incident Already Reported
+                </div>
+                <p style={{ fontSize:'0.82rem', color:'#888', lineHeight:1.6, marginBottom:'0.75rem' }}>
+                  A <strong style={{ color:'#f0ede8', textTransform:'capitalize' }}>{duplicateInfo.existingStatus}</strong> fire
+                  incident was already reported <strong style={{ color:'#f0ede8' }}>{duplicateInfo.distance}m</strong> from
+                  this location within the last 30 minutes. Responders are already aware.
+                </p>
+                <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize:'0.78rem' }}
+                    onClick={() => navigate(`/incidents/${duplicateInfo.existingId}`)}
+                  >
+                    View Existing Report →
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize:'0.78rem', color:'#f4820a' }}
+                    onClick={() => {
+                      setForceDuplicate(true);
+                      setDuplicateInfo(null);
+                    }}
+                  >
+                    Submit Anyway (different fire)
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ── Submit Button ─────────────────────────────── */}
             {!user?.isRestricted && !user?.isBanned && (

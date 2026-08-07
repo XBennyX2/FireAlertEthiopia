@@ -1,14 +1,30 @@
-import torch
-import clip
-from PIL import Image
-import io
+try:
+    import torch
+    import clip
+    from PIL import Image
+    import io
+except Exception as exc:
+    torch = None
+    clip = None
+    Image = None
+    io = None
+    print(f"CLIP image dependencies unavailable: {exc}")
 
 print("Loading CLIP image classification model... (first run downloads ~600MB, please wait)")
 
 _device = "cpu"  # change to "cuda" if you have a GPU
-_model, _preprocess = clip.load("ViT-B/32", device=_device)
-
-print("CLIP image model loaded successfully.")
+if clip is not None and torch is not None and Image is not None and io is not None:
+    try:
+        _model, _preprocess = clip.load("ViT-B/32", device=_device)
+        print("CLIP-based image classifier loaded successfully.")
+    except Exception as exc:
+        print(f"CLIP-based image classifier unavailable: {exc}")
+        _model = None
+        _preprocess = None
+else:
+    print("CLIP package not installed; using image analysis fallback.")
+    _model = None
+    _preprocess = None
 
 # ── Candidate labels CLIP will compare the image against ───────────
 CANDIDATE_LABELS = [
@@ -28,9 +44,20 @@ FIRE_RELATED_LABELS = {
 
 def analyze_fire_image(image_bytes):
     """
-    Use real CLIP vision-language understanding to determine
-    if an image genuinely shows fire/smoke vs something else.
+    Use real CLIP vision-language understanding when available; otherwise
+    return a safe fallback result so the service remains usable.
     """
+    if _model is None or _preprocess is None or Image is None or io is None:
+        return {
+            'fire_detected':    False,
+            'fire_confidence':  0,
+            'top_label':        'model_unavailable',
+            'top_label_score':  0.0,
+            'all_scores':       {},
+            'overall_verified': False,
+            'flags':            ['IMAGE_ANALYSIS_UNAVAILABLE'],
+        }
+
     try:
         image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
         image_input = _preprocess(image).unsqueeze(0).to(_device)

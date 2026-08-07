@@ -13,3 +13,43 @@ body {
 .leaflet-default-icon-path {
   background-image: url(https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png);
 }
+
+/* Google Translate Widget Override */
+.goog-te-banner-frame.skiptranslate,
+.goog-te-banner-frame,
+.goog-te-banner,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+iframe.skiptranslate,
+iframe[class*="skiptranslate"],
+iframe[id*="google-translate"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+html {
+  top: 0px !important;
+  position: static !important;
+}
+
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}

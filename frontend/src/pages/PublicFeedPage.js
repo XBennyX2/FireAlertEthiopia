@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 import '../dashboard.css';
 
 const STATUS_COLORS = {
@@ -25,6 +26,11 @@ export default function PublicFeedPage() {
   const [page,      setPage]      = useState(1);
   const [pages,     setPages]     = useState(1);
   const [filter,    setFilter]    = useState('');
+  const { user }                  = useAuth();
+
+  const dashboardLink =
+    user?.role === 'admin'     ? '/admin'     :
+    user?.role === 'responder' ? '/responder' : '/dashboard';
 
   useEffect(() => { load(); }, [page, filter]);
 
@@ -49,8 +55,19 @@ export default function PublicFeedPage() {
         </Link>
         <div className="dash-topbar-right">
           <Link to="/safety"    className="btn-secondary" style={{ fontSize:'0.78rem' }}>🛡️ Safety</Link>
-          <Link to="/login"     className="btn-secondary" style={{ fontSize:'0.78rem' }}>Sign In</Link>
-          <Link to="/register"  className="btn-primary"   style={{ fontSize:'0.78rem' }}>Report Fire</Link>
+          {user ? (
+            <>
+              <Link to={dashboardLink} className="btn-secondary" style={{ fontSize:'0.78rem' }}>Dashboard</Link>
+              {user.role === 'user' && (
+                <Link to="/report" className="btn-primary" style={{ fontSize:'0.78rem' }}>Report Fire</Link>
+              )}
+            </>
+          ) : (
+            <>
+              <Link to="/login"     className="btn-secondary" style={{ fontSize:'0.78rem' }}>Sign In</Link>
+              <Link to="/register"  className="btn-primary"   style={{ fontSize:'0.78rem' }}>Report Fire</Link>
+            </>
+          )}
         </div>
       </nav>
 
@@ -127,17 +144,45 @@ export default function PublicFeedPage() {
           </div>
         )}
 
-        <div style={{ textAlign:'center', marginTop:'2rem', padding:'1rem', background:'rgba(230,60,47,0.06)', borderRadius:10, border:'1px solid rgba(230,60,47,0.15)' }}>
-          <div style={{ fontWeight:700, fontSize:'0.875rem', color:'#f0ede8', marginBottom:'0.35rem' }}>
-            See a fire? Report it now.
+        {user ? (
+          user.role === 'user' ? (
+            <div style={{ textAlign:'center', marginTop:'2rem', padding:'1rem', background:'rgba(230,60,47,0.06)', borderRadius:10, border:'1px solid rgba(230,60,47,0.15)' }}>
+              <div style={{ fontWeight:700, fontSize:'0.875rem', color:'#f0ede8', marginBottom:'0.35rem' }}>
+                See a fire? Report it now.
+              </div>
+              <div style={{ fontSize:'0.78rem', color:'#666', marginBottom:'0.75rem' }}>
+                Submit a report with GPS and photos.
+              </div>
+              <Link to="/report" className="btn-primary" style={{ fontSize:'0.82rem' }}>
+                🚨 Report a Fire
+              </Link>
+            </div>
+          ) : (
+            <div style={{ textAlign:'center', marginTop:'2rem', padding:'1rem', background:'rgba(230,60,47,0.06)', borderRadius:10, border:'1px solid rgba(230,60,47,0.15)' }}>
+              <div style={{ fontWeight:700, fontSize:'0.875rem', color:'#f0ede8', marginBottom:'0.35rem' }}>
+                Manage or view fire incidents
+              </div>
+              <div style={{ fontSize:'0.78rem', color:'#666', marginBottom:'0.75rem' }}>
+                Go to your dashboard to monitor reports and responder status.
+              </div>
+              <Link to={dashboardLink} className="btn-primary" style={{ fontSize:'0.82rem' }}>
+                Go to Dashboard
+              </Link>
+            </div>
+          )
+        ) : (
+          <div style={{ textAlign:'center', marginTop:'2rem', padding:'1rem', background:'rgba(230,60,47,0.06)', borderRadius:10, border:'1px solid rgba(230,60,47,0.15)' }}>
+            <div style={{ fontWeight:700, fontSize:'0.875rem', color:'#f0ede8', marginBottom:'0.35rem' }}>
+              See a fire? Report it now.
+            </div>
+            <div style={{ fontSize:'0.78rem', color:'#666', marginBottom:'0.75rem' }}>
+              Create a free account to submit a report with GPS and photos.
+            </div>
+            <Link to="/register" className="btn-primary" style={{ fontSize:'0.82rem' }}>
+              🚨 Report a Fire
+            </Link>
           </div>
-          <div style={{ fontSize:'0.78rem', color:'#666', marginBottom:'0.75rem' }}>
-            Create a free account to submit a report with GPS and photos.
-          </div>
-          <Link to="/register" className="btn-primary" style={{ fontSize:'0.82rem' }}>
-            🚨 Report a Fire
-          </Link>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -40,12 +40,17 @@ connectDB();
 const app    = express();
 const server = http.createServer(app);
 
-app.set('trust proxy', 1);
-
-// ── Pass the unified allowed origins to Socket.io ────────────────
+// ── Socket.io Configuration (Updated with https://localhost) ──────
 const io     = new Server(server, {
   cors: {
-    origin:  allowedOrigins,
+    origin: [
+      'http://localhost:3000', 
+      'http://127.0.0.1:3000', 
+      'http://192.168.1.6:3000', // Web testing on local IP
+      'capacitor://localhost',   // iOS native origin
+      'http://localhost',         // Android cleartext fallback origin
+      'https://localhost'        // Android secure WebView origin (Crucial!)
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   },
@@ -68,8 +73,11 @@ app.use(helmet({
         "'self'", 
         'ws://localhost:5000', 
         'http://localhost:5000',
-        'wss://firealert-backend.onrender.com', 
-        'https://firealert-backend.onrender.com'
+        'ws://192.168.1.6:5000',   // Allows local IP WebSockets
+        'http://192.168.1.6:5000', // Allows local IP HTTP requests
+        'capacitor://localhost',   
+        'http://localhost',
+        'https://localhost'        // Trust native SSL connections
       ],
       mediaSrc:       ["'self'", 'blob:'],
       objectSrc:      ["'none'"],
@@ -77,12 +85,22 @@ app.use(helmet({
   },
 }));
 
-// ── CORS ──────────────────────────────────────────────────────────
+// ── CORS Configuration (Updated with https://localhost) ───────────
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    const allowed = [
+      'http://localhost:3000', 
+      'http://127.0.0.1:3000', 
+      'http://192.168.1.6:3000',
+      'capacitor://localhost',
+      'http://localhost',
+      'https://localhost'        // Allow phone secure origin bypass (Crucial!)
+    ];
+    // Mobile apps sometimes make requests without an "origin" header
+    if (!origin || allowed.includes(origin)) {
       callback(null, true);
     } else {
+      console.log('Blocked by CORS:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -233,5 +251,8 @@ setTimeout(() => {
 }, nextMon - new Date());
 
 // ── Start server ────────────────────────────────────────────────────
+
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Listen on '0.0.0.0' to permit connections from external devices on the same Wi-Fi network
+server.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
