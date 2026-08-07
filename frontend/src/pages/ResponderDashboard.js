@@ -6,6 +6,8 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import IncidentMap from '../components/IncidentMap';
 import LiveTrackingMap from '../components/LiveTrackingMap';
 import API from '../api/axios';
+// Import the dynamic server URL configuration to replace localhost references
+import { SERVER_URL } from '../config';
 import { useToast } from '../context/ToastContext';
 import '../dashboard.css';
 import SkeletonCard from '../components/SkeletonCard';
@@ -141,7 +143,7 @@ function LeaderboardTab() {
           </div>
           <div style={{ width:32, height:32, borderRadius:'50%', overflow:'hidden', flexShrink:0, background:'#1e1e1e', display:'flex', alignItems:'center', justifyContent:'center' }}>
             {r.profilePhoto
-              ? <img src={`http://localhost:5000/${r.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              ? <img src={`${SERVER_URL}/${r.profilePhoto}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
               : <span style={{ fontSize:'0.75rem', color:'#888' }}>{r.name?.charAt(0)}</span>
             }
           </div>
@@ -314,7 +316,7 @@ export default function ResponderDashboard() {
             }}
           >
             {user?.profilePhoto
-              ? <img src={user.profilePhoto} alt="profile" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              ? <img src={`${SERVER_URL}/${user.profilePhoto}`} alt="profile" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
               : user?.name?.charAt(0)?.toUpperCase() || '?'
             }
           </Link>
@@ -636,7 +638,7 @@ export default function ResponderDashboard() {
                       {/* ── Media preview ────────────────────────── */}
                       {incident.mediaFiles?.length > 0 && (
                         <img
-                          src={`http://localhost:5000/${incident.mediaFiles[0]}`}
+                          src={`${SERVER_URL}/${incident.mediaFiles[0]}`}
                           alt="incident"
                           style={{ width:'100%', height:140, objectFit:'cover', borderRadius:8, display:'block' }}
                           onError={e => { e.target.style.display = 'none'; }}

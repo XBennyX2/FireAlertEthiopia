@@ -1,3 +1,4 @@
+// server.js
 const dotenv     = require('dotenv');
 dotenv.config();
 const express    = require('express');
@@ -21,6 +22,18 @@ const { protect }   = require('./middleware/authMiddleware');
 const { authorize } = require('./middleware/roleMiddleware');
 const { publishScheduledContent, sendWeeklySafetyDigest, sendAdminWeeklyReport } = require('./utils/scheduler');
 
+// ── Define allowed domains ────────────────────────────────────────
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://localhost',
+  'capacitor://localhost',
+  'https://fire-alert-ethiopia-zeta.vercel.app', 
+  'https://firealert.vercel.app',
+  'https://fire-alert-ethiopia-git-master-xsilencex007-gmailcoms-projects.vercel.app',
+  'https://fire-alert-ethiopia.vercel.app',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
 connectDB();
 
@@ -39,6 +52,7 @@ const io     = new Server(server, {
       'https://localhost'        // Android secure WebView origin (Crucial!)
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
   },
 });
 
@@ -46,8 +60,8 @@ app.set('io', io);
 
 // ── Security headers ──────────────────────────────────────────────
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' }, // allows media files to load
-  crossOriginEmbedderPolicy: false, // required for Leaflet maps
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, 
+  crossOriginEmbedderPolicy: false, 
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
@@ -124,7 +138,7 @@ app.use((req, res, next) => {
   }
   if (req.body)   sanitizeObject(req.body);
   if (req.params) sanitizeObject(req.params);
-  if (req.query)  sanitizeObject(req.query); // sanitized in place — req.query is read-only in newer Express
+  if (req.query)  sanitizeObject(req.query);
   next();
 });
 
@@ -134,19 +148,20 @@ app.use(hpp());
 // ── Static files ──────────────────────────────────────────────────
 app.use('/uploads', express.static('uploads'));
 
-// ── Global rate limiter ───────────────────────────────────────────
+// ── Global /api/ rate limiter ─────────────────────────────────────
 app.use('/api/', apiLimiter);
 
-// ── Auth routes with stricter limits ─────────────────────────────
-app.use('/api/auth/login',           detectSuspiciousLogin, authLimiter);
+// app.use('/api/auth/login',           detectSuspiciousLogin, authLimiter);
+// ── Specific route rate-limiting middleware triggers ──────────────
+app.use('/api/auth/login',           authLimiter);
 app.use('/api/auth/register',        authLimiter);
 app.use('/api/auth/forgot-password', passwordResetLimiter);
 app.use('/api/auth/reset-password',  passwordResetLimiter);
+
 app.use('/api/incidents', (req, res, next) => {
   if (req.method === 'POST') return reportLimiter(req, res, next);
   next();
 });
-
 
 // ── Routes ────────────────────────────────────────────────────────
 app.use('/api/auth',      require('./routes/authRoutes'));
@@ -201,7 +216,6 @@ io.on('connection', (socket) => {
     socket.leave(`incident_${incidentId}`);
   });
 
-  // Messaging — typing indicators
   socket.on('typing', ({ to, fromName }) => {
     io.to(to).emit('typing', { fromName });
   });
@@ -216,12 +230,9 @@ io.on('connection', (socket) => {
 });
 
 // ── Scheduled background jobs ──────────────────────────────────────
-
-// Auto-publish scheduled safety content — every 5 minutes
 setInterval(publishScheduledContent, 5 * 60 * 1000);
-publishScheduledContent(); // run once on startup
+publishScheduledContent(); 
 
-// Weekly safety digest — every Sunday at 09:00
 const now      = new Date();
 const nextSun  = new Date();
 nextSun.setDate(nextSun.getDate() + ((7 - now.getDay()) % 7 || 7));
@@ -231,7 +242,6 @@ setTimeout(() => {
   setInterval(sendWeeklySafetyDigest, 7 * 24 * 60 * 60 * 1000);
 }, nextSun - now);
 
-// Weekly admin report — every Monday at 08:00
 const nextMon = new Date();
 nextMon.setDate(nextMon.getDate() + ((1 + 7 - nextMon.getDay()) % 7 || 7));
 nextMon.setHours(8, 0, 0, 0);

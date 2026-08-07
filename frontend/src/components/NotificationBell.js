@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
-// Make sure to import your API instance here:
 import API from '../api/axios';
 
 // ── Styles ────────────────────────────────────────────────────────
@@ -50,7 +49,6 @@ const S = {
   footerBtn: { background: 'none', border: 'none', color: '#f4820a', fontSize: '0.78rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }
 };
 
-// Inject dropdown animation and CSS-based hover/scrollbar states once
 if (typeof document !== 'undefined' && !document.getElementById('bell-style')) {
   const style = document.createElement('style');
   style.id = 'bell-style';
@@ -92,7 +90,9 @@ export default function NotificationBell() {
   const SOCKET_URL = window.env?.REACT_APP_SOCKET_URL || import.meta.env?.VITE_SOCKET_URL || 'http://localhost:5000';
 
   // ── Functions ───────────────────────────────────────────────────
-  const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllRead = useCallback(() => {
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+  }, []);
 
   const markRead = (id) => setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
 
@@ -143,6 +143,12 @@ export default function NotificationBell() {
     }
   }, [user]);
 
+  // ── Stable Wrapper for Refreshing Profile Data ──────────────────
+  const stableRefreshUser = useRef(refreshUser);
+  useEffect(() => {
+    stableRefreshUser.current = refreshUser;
+  }, [refreshUser]);
+
   // ── Socket connection ───────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
@@ -165,7 +171,7 @@ export default function NotificationBell() {
       }, ...prev.slice(0, 19)]);
 
       if (['verified', 'resolved', 'rejected', 'applicationApproved', 'applicationRejected'].includes(type)) {
-        refreshUser();
+        stableRefreshUser.current?.();
       }
     };
 
@@ -191,16 +197,17 @@ export default function NotificationBell() {
       postId: data.postId,
     }));
 
-    socket.on('applicationRejected', (data) => {
-      addNotif('applicationRejected', { message: data.message, incidentId: null });
+    socket.on('applicationItem', (data) => {
+      addNotif(data.type, { message: data.message, incidentId: null });
     });
 
-    socket.on('applicationApproved', (data) => {
-      addNotif('applicationApproved', { message: data.message, incidentId: null });
-    });
+    socket.on('applicationRejected', (data) => addNotif('applicationRejected', { message: data.message }));
+    socket.on('applicationApproved', (data) => addNotif('applicationApproved', { message: data.message }));
 
-    return () => socket.disconnect();
-  }, [user, SOCKET_URL, refreshUser]);
+    return () => {
+      socket.disconnect();
+    };
+  }, [user?._id, SOCKET_URL]);
 
   // ── Close dropdown when clicking outside ───────────────────────
   useEffect(() => {
@@ -214,11 +221,10 @@ export default function NotificationBell() {
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  }, [markAllRead]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Filter local notifications before slicing and displaying
   const filteredNotifications = filter === 'all' 
     ? notifications 
     : notifications.filter(n => n.type === filter);
@@ -279,7 +285,7 @@ export default function NotificationBell() {
 
           {/* Items */}
           {filteredNotifications.length === 0 ? (
-            <div style={S.empty}>No notifications yet</div>
+            <div style={S.empty}>No matching notifications</div>
           ) : (
             filteredNotifications.slice(0, 5).map(n => (
               <div
@@ -309,10 +315,10 @@ export default function NotificationBell() {
           )}
 
           {/* Footer */}
-          {filteredNotifications.length > 0 && (
+          {notifications.length > 0 && (
             <div style={S.footer}>
               <button style={S.footerBtn} onClick={handleViewAll}>
-                See all {filteredNotifications.length} notifications
+                See all {notifications.length} notifications
               </button>
             </div>
           )}

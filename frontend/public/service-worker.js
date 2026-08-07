@@ -32,37 +32,60 @@ self.addEventListener('activate', (event) => {
 });
 
 // ── Fetch — Stale-While-Revalidate & SPA Fallback ──────────────
+// ── Fetch — Stale-While-Revalidate & SPA Fallback ──────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // 1. Ignore API calls and external services
+  // 1. Skip non-http schemes (e.g., chrome-extension://, file://, data:) to prevent crashes
+  if (!request.url.startsWith('http://') && !request.url.startsWith('https://')) {
+    return;
+  }
+
+  // 2. Ignore API calls and external services
   if (request.url.includes('/api/') || request.url.includes('nominatim.openstreetmap.org')) {
     return;
   }
 
-  // 2. Only handle GET requests
+  // 3. Only handle GET requests
   if (request.method !== 'GET') return;
 
-  // 3. SPA Router Offline Fallback
+  // 4. SPA Router Offline Fallback
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+      fetch(request).catch(async () => {
+        const fallback = await caches.match('/index.html');
+        // If index.html isn't cached, return a basic offline error page/text instead of undefined
+        return fallback || new Response(
+          '<h1>Offline</h1><p>Please check your connection.</p>', 
+          { status: 503, headers: { 'Content-Type': 'text/html' } }
+        );
+      })
     );
     return;
   }
 
-  // 4. Stale-While-Revalidate for app assets
+  // 5. Stale-While-Revalidate for app assets
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request).then((networkResponse) => {
-        // Only cache successful responses
-        if (networkResponse?.status === 200) {
+        // Only cache valid, successful, first-party network responses
+        if (
+          networkResponse && 
+          networkResponse.status === 200 && 
+          networkResponse.type === 'basic'
+        ) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
         }
         return networkResponse;
-      }).catch(() => {
-        // Silently fail background updates
+      }).catch((err) => {
+        // If there's no cached response and the network fetch failed, 
+        // we must return a valid error response to avoid the TypeError.
+        if (!cachedResponse) {
+          return new Response('Network error occurred', { status: 480, statusText: 'Network Error' });
+        }
+        // Otherwise, if we have a cache fallback, let the fetch fail gracefully in the background
+        console.warn('Background update failed:', err);
       });
 
       return cachedResponse || fetchPromise;

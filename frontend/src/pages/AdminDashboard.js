@@ -9,6 +9,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useToast } from '../context/ToastContext';
 import SkeletonCard from '../components/SkeletonCard';
 import AdminIncidentMap from '../components/AdminIncidentMap';
+import { SERVER_URL } from '../config'
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -1026,7 +1027,7 @@ export default function AdminDashboard() {
                        {app.documents.map((doc, i) => (
                         <a
                           key={i}
-                          href={`http://localhost:5000/${doc.path}`}
+                          href={`${SERVER_URL}/${doc.path}`}
                           target="_blank"
                           rel="noreferrer"
                           style={{

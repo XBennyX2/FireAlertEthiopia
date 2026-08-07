@@ -13,7 +13,6 @@ const API = axios.create({
   withCredentials: true // Ensures cookies/sessions are handled properly across local domains
 });
 
-// Automatically attach the JWT token to every request
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {

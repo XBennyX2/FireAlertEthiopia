@@ -8,6 +8,7 @@ import API from '../api/axios';
 import '../dashboard.css';
 import { cacheIncident, getCachedIncident } from '../utils/offlineDB';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { SERVER_URL } from '../config';
 
 function fmtDate(iso) {
   if (!iso) return '—';
@@ -378,7 +379,7 @@ export default function IncidentDetailPage() {
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:'0.6rem' }}>
               {incident.mediaFiles.map((file, i) => {
-                const url      = `http://localhost:5000/${file}`;
+                const url      = `${SERVER_URL}/${file}`;
                 const isImage  = /\.(jpg|jpeg|png|gif|webp)$/i.test(file);
                 const isVideo  = /\.(mp4|mov|avi|webm)$/i.test(file);
 

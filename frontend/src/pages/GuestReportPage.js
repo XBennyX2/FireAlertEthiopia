@@ -51,7 +51,8 @@ export default function GuestReportPage() {
     if (!validateIncident()) return;
     setSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/incidents/guest', {
+      // Use dynamic SERVER_URL route path template
+      const res = await fetch(`${SERVER_URL}/api/incidents/guest`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
